@@ -6,8 +6,6 @@ pip
 pytest
 pytest-homeassistant-custom-component
 ruff
-types-aiofiles
-types-PyMySQL
 types-pyRFC3339
 types-python-dateutil
 types-PyYAML
