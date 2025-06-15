@@ -29,8 +29,7 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
 ) -> bool:
     """Set up this integration using UI."""
-
-    _LOGGER.debug("config_entry data: %s", config_entry.data)
+    _LOGGER.debug("Config Entry: %s", config_entry.as_dict())
 
     site_root: str = config_entry.data[CONF_SITE_ROOT]
     ping_endpoint: str = config_entry.data[CONF_PING_ENDPOINT]
@@ -57,7 +56,6 @@ async def async_setup_entry(
         ping_uuid=config_entry.data.get(CONF_PING_UUID),
     )
     config_entry.runtime_data = coordinator
-    _LOGGER.debug("Config Entry: %s", config_entry.as_dict())
 
     await coordinator.async_config_entry_first_refresh()
     await hass.config_entries.async_forward_entry_setups(config_entry, platforms)
