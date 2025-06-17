@@ -291,7 +291,7 @@ class HealthchecksioConfigFlow(ConfigFlow, domain=DOMAIN):
                 if valid:
                     return self.async_update_reload_and_abort(
                         reconfigure_entry,
-                        data_updates=user_input,
+                        data=user_input,
                     )
                 self._errors["base"] = "auth"
 
@@ -328,7 +328,7 @@ class HealthchecksioConfigFlow(ConfigFlow, domain=DOMAIN):
                 data: MutableMapping[str, Any] = {**self._initial_data, **user_input}
                 return self.async_update_reload_and_abort(
                     self._reconfigure_entry,
-                    data_updates=data,
+                    data=data,
                 )
             self._errors["base"] = "auth_self"
 

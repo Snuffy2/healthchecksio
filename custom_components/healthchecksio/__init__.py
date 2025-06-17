@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState, OperationNotAllowed
 from homeassistant.const import CONF_API_KEY, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_platform, entity_registry as er
@@ -72,29 +72,34 @@ async def async_unload_entry(
 ) -> bool:
     """Unload a config entry."""
     _LOGGER.debug("Unloading Config Entry: %s", config_entry.as_dict())
-    curr_plat: list[str] = [
-        p.domain
-        for p in entity_platform.async_get_platforms(hass, DOMAIN)
-        if p.config_entry is not None and config_entry.entry_id == p.config_entry.entry_id
+    platforms: list[entity_platform.EntityPlatform] = entity_platform.async_get_platforms(
+        hass, DOMAIN
+    )
+    _LOGGER.debug("platforms: %s", platforms)
+    active_platforms: list[Platform] = [
+        Platform(p.domain)
+        for p in platforms
+        if p.config_entry is not None
+        and config_entry.entry_id == p.config_entry.entry_id
+        and p.config_entry.state in {ConfigEntryState.LOADED, ConfigEntryState.UNLOAD_IN_PROGRESS}
     ]
+    unique_platforms: list[Platform] = list(dict.fromkeys(active_platforms))
 
-    if curr_plat:
-        _LOGGER.debug("Unloading Platforms: %s", curr_plat)
+    unload_ok = True
+    _LOGGER.debug("Unloading Platforms: %s", unique_platforms)
+    if unique_platforms:
         try:
             unload_ok = await hass.config_entries.async_unload_platforms(
                 config_entry,
-                curr_plat,
+                unique_platforms,
             )
-        except ValueError as e:
+        except (ValueError, OperationNotAllowed) as e:
             unload_ok = False
             _LOGGER.error(
                 "Unable to unload platforms. %s: %s",
                 e.__class__.__qualname__,
                 e,
             )
-    else:
-        unload_ok = False
-        _LOGGER.error("Unable to identify platforms to unload")
     if unload_ok:
         _LOGGER.info("Successfully removed the HealthChecks.io integration")
     return unload_ok
