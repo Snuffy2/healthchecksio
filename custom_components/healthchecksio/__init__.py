@@ -59,6 +59,7 @@ async def async_setup_entry(
         ping_uuid=config_entry.data.get(CONF_PING_UUID),
     )
     config_entry.runtime_data = coordinator
+    config_entry.async_on_unload(config_entry.add_update_listener(_async_update_listener))
 
     await coordinator.async_config_entry_first_refresh()
     await hass.config_entries.async_forward_entry_setups(config_entry, platforms)
@@ -85,7 +86,7 @@ async def async_unload_entry(
     ]
     unique_platforms: list[Platform] = list(dict.fromkeys(active_platforms))
 
-    unload_ok = True
+    unload_ok: bool = True
     _LOGGER.debug("Unloading Platforms: %s", unique_platforms)
     if unique_platforms:
         try:
@@ -103,6 +104,35 @@ async def async_unload_entry(
     if unload_ok:
         _LOGGER.info("Successfully removed the HealthChecks.io integration")
     return unload_ok
+
+
+async def _async_update_listener(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+) -> None:
+    """Handle options update."""
+    entity_registry = er.async_get(hass)
+    binary_sensor: bool = config_entry.data[CONF_CREATE_BINARY_SENSOR]
+    sensor: bool = config_entry.data[CONF_CREATE_SENSOR]
+
+    for ent in er.async_entries_for_config_entry(entity_registry, config_entry.entry_id):
+        platform = ent.entity_id.split(".")[0]
+        if (platform == Platform.SENSOR and not sensor) or (
+            platform == Platform.BINARY_SENSOR and not binary_sensor
+        ):
+            try:
+                entity_registry.async_remove(ent.entity_id)
+                _LOGGER.debug("removed_entity_id: %s", ent.entity_id)
+            except (KeyError, ValueError) as e:
+                _LOGGER.error(
+                    "Error removing entity: %s. %s: %s",
+                    ent.entity_id,
+                    e.__class__.__qualname__,
+                    e,
+                )
+            continue
+
+    await hass.config_entries.async_reload(config_entry.entry_id)
 
 
 async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:

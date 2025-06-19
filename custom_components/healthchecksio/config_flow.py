@@ -10,9 +10,9 @@ from typing import Any
 from aiohttp import ClientError, ClientSession, ClientTimeout
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.const import CONF_API_KEY
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -178,8 +178,6 @@ class HealthchecksioConfigFlow(ConfigFlow, domain=DOMAIN):
         """Initialize the config flow."""
         self._errors: dict[str, str] = {}
         self._initial_data: MutableMapping[str, Any] = {}
-        self._reconfigure_entry: ConfigEntry | None = None
-        self._prev_data: Mapping[str, Any] = {}
 
     async def async_step_user(
         self,
@@ -254,18 +252,32 @@ class HealthchecksioConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=self._errors,
         )
 
-    async def async_step_reconfigure(
-        self, user_input: MutableMapping[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Config flow reconfigure step."""
-        reconfigure_entry: ConfigEntry = self._get_reconfigure_entry()
-        prev_data: Mapping[str, Any] = reconfigure_entry.data
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: ConfigEntry,
+    ) -> HealthchecksioOptionsFlowHandler:
+        """Get the options flow for this handler."""
+        return HealthchecksioOptionsFlowHandler(config_entry)
+
+
+class HealthchecksioOptionsFlowHandler(OptionsFlow):
+    """Handle Options flow for HealthChecks.io."""
+
+    def __init__(self, config_entry: ConfigEntry) -> None:
+        """Initialize options flow."""
+        self._errors: dict[str, str] = {}
+        self._initial_data: MutableMapping[str, Any] = {}
+        self._prev_data: Mapping[str, Any] = {}
+
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Options flow init step."""
+        prev_data: Mapping[str, Any] = self.config_entry.data
         self._errors = {}
         if user_input is not None:
             # https://developers.home-assistant.io/docs/config_entries_config_flow_handler#unique-ids
             user_input[CONF_API_KEY] = prev_data[CONF_API_KEY]
             await self.async_set_unique_id(user_input.get(CONF_API_KEY))
-            self._abort_if_unique_id_mismatch()
 
             if not user_input.get(CONF_CREATE_BINARY_SENSOR) and not user_input.get(
                 CONF_CREATE_SENSOR
@@ -274,9 +286,8 @@ class HealthchecksioConfigFlow(ConfigFlow, domain=DOMAIN):
             elif user_input.get(CONF_SELF_HOSTED):
                 # don't check yet, we need more info
                 self._initial_data = user_input
-                self._reconfigure_entry = reconfigure_entry
                 self._prev_data = prev_data
-                return await self.async_step_reconfigure_self_hosted()
+                return await self.async_step_self_hosted()
             else:
                 user_input[CONF_SITE_ROOT] = DEFAULT_SITE_ROOT
                 user_input[CONF_PING_ENDPOINT] = DEFAULT_PING_ENDPOINT
@@ -289,14 +300,13 @@ class HealthchecksioConfigFlow(ConfigFlow, domain=DOMAIN):
                     ping_uuid=user_input.get(CONF_PING_UUID),
                 )
                 if valid:
-                    return self.async_update_reload_and_abort(
-                        reconfigure_entry,
-                        data=user_input,
-                    )
+                    self.hass.config_entries.async_update_entry(self.config_entry, data=user_input)
+                    return self.async_create_entry(title="", data={})
+
                 self._errors["base"] = "auth"
 
         return self.async_show_form(
-            step_id="reconfigure",
+            step_id="init",
             data_schema=_build_user_input_schema(
                 user_input=user_input, fallback=prev_data, reconf=True
             ),
@@ -306,7 +316,7 @@ class HealthchecksioConfigFlow(ConfigFlow, domain=DOMAIN):
             },
         )
 
-    async def async_step_reconfigure_self_hosted(
+    async def async_step_self_hosted(
         self, user_input: MutableMapping[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Handle the reconfigure step for a self-hosted instance."""
@@ -323,17 +333,15 @@ class HealthchecksioConfigFlow(ConfigFlow, domain=DOMAIN):
                 ping_endpoint=user_input[CONF_PING_ENDPOINT],
                 ping_uuid=self._initial_data.get(CONF_PING_UUID),
             )
-            if valid and self._reconfigure_entry is not None:
+            if valid:
                 # merge data from initial config flow and this flow
                 data: MutableMapping[str, Any] = {**self._initial_data, **user_input}
-                return self.async_update_reload_and_abort(
-                    self._reconfigure_entry,
-                    data=data,
-                )
+                self.hass.config_entries.async_update_entry(self.config_entry, data=data)
+                return self.async_create_entry(title="", data={})
             self._errors["base"] = "auth_self"
 
         return self.async_show_form(
-            step_id="reconfigure_self_hosted",
+            step_id="self_hosted",
             data_schema=_build_self_hosted_schema(
                 user_input=user_input, fallback=self._prev_data, reconf=True
             ),
