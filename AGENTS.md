@@ -54,7 +54,7 @@
 - Run `./.venv/bin/prek run --all-files` for a complete lint, formatting, spelling, mypy, and workflow check.
 - Run the complete pytest suite by default with `./.venv/bin/pytest`. Explain why if a targeted run is more appropriate.
 - This repository currently has no test suite. When changing behavior, add focused Home Assistant tests under `tests/` with fixtures in `tests/conftest.py` rather than relying only on manual testing.
-- Use `uv build --out-dir /private/tmp/healthchecksio-build-check` when package metadata or distribution contents change.
+- Use `uv build --out-dir "${TMPDIR:-/tmp}/healthchecksio-build-check"` when package metadata or distribution contents change.
 - Do not recommend `tox`; it is not used here.
 
 ## Testing Expectations

@@ -28,6 +28,7 @@ ha = [
 ]
 lint = [
     { include-group = "ha" },
+    "homeassistant-stubs",
     "mypy",
     "prek",
     "ruff",

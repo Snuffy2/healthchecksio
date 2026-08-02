@@ -21,26 +21,78 @@ jobs:
 
       - name: Update Version in Manifest
         if: ${{ github.event_name == 'release' && github.event.release.draft == false }}
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          sed -i 's/\"version\"\s*\:\s*\".*\"/\"version\":\"${{ github.event.release.tag_name }}\"/g' ./custom_components/healthchecksio/manifest.json
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path("custom_components/healthchecksio/manifest.json")
+          manifest = json.loads(path.read_text())
+          if not isinstance(manifest, dict) or not isinstance(manifest.get("version"), str):
+              raise SystemExit("manifest.json must contain a string version field")
+          manifest["version"] = os.environ["RELEASE_TAG"]
+          path.write_text(json.dumps(manifest, indent=2) + "\n")
+          PY
 
       - name: Update Version in const.py
         if: ${{ github.event_name == 'release' && github.event.release.draft == false }}
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          sed -i 's/^VERSION \= \".*\"/VERSION \= \"${{ github.event.release.tag_name }}\"/' ./custom_components/healthchecksio/const.py
+          python - <<'PY'
+          import ast
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path("custom_components/healthchecksio/const.py")
+          source = path.read_text()
+          tree = ast.parse(source, filename=str(path))
+          assignments = [
+              node
+              for node in tree.body
+              if isinstance(node, ast.Assign)
+              and len(node.targets) == 1
+              and isinstance(node.targets[0], ast.Name)
+              and node.targets[0].id == "VERSION"
+          ]
+          if (
+              len(assignments) != 1
+              or not isinstance(assignments[0].value, ast.Constant)
+              or not isinstance(assignments[0].value.value, str)
+          ):
+              raise SystemExit("const.py must contain one top-level string VERSION assignment")
+          assignment = assignments[0]
+          lines = source.splitlines(keepends=True)
+          lines[assignment.lineno - 1 : assignment.end_lineno] = [
+              f"VERSION = {json.dumps(os.environ['RELEASE_TAG'])}\n"
+          ]
+          path.write_text("".join(lines))
+          PY
 
       - name: Commit & Push Version Changes
         if: ${{ github.event_name == 'release' && github.event.release.draft == false && github.event.release.prerelease == false }}
-        uses: stefanzweifel/git-auto-commit-action@v7
-        with:
-          branch: ${{ github.event.release.target_commitish }}
-          commit_message: 'Updating to version ${{ github.event.release.tag_name }} [skip ci]'
-
-      - name: Update Release with Version Changes Commit
-        if: ${{ github.event_name == 'release' && github.event.release.draft == false && github.event.release.prerelease == false }}
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          TARGET_BRANCH: ${{ github.event.release.target_commitish }}
         run: |
-          git tag -f ${{ github.event.release.tag_name }}
-          git push -f origin ${{ github.event.release.tag_name }}
+          case "${RELEASE_TAG}" in
+            ""|-*) echo "Invalid release tag" >&2; exit 1 ;;
+          esac
+          git check-ref-format "refs/tags/${RELEASE_TAG}"
+          git check-ref-format "refs/heads/${TARGET_BRANCH}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add custom_components/healthchecksio/manifest.json custom_components/healthchecksio/const.py
+          if ! git diff --cached --quiet; then
+            git commit -m "Updating to version ${RELEASE_TAG} [skip ci]"
+            git push origin "HEAD:refs/heads/${TARGET_BRANCH}"
+          fi
+          git tag -f -- "${RELEASE_TAG}"
+          git push --force origin "refs/tags/${RELEASE_TAG}"
 
       - name: Create Zip
         run: |
