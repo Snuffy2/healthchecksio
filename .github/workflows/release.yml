@@ -19,16 +19,6 @@ jobs:
           # back cleanly; otherwise keep the workflow's triggering ref.
           ref: ${{ github.event_name == 'release' && github.event.release.target_commitish || github.ref }}
 
-      - name: Debug GitHub Variables
-        run: |
-          echo "github.event_name: ${{ github.event_name }}"
-          echo "github.ref_name: ${{ github.ref_name }}"
-          echo "github.event.release.tag_name: ${{ github.event.release.tag_name }}"
-          echo "github.event.repository.default_branch: ${{ github.event.repository.default_branch }}"
-          echo "github.event.release.target_commitish: ${{ github.event.release.target_commitish }}"
-          echo "github.event.release.prerelease: ${{ github.event.release.prerelease }}"
-          echo "github.event.release.draft: ${{ github.event.release.draft }}"
-
       - name: Update Version in Manifest
         if: ${{ github.event_name == 'release' && github.event.release.draft == false }}
         run: |
