@@ -62,6 +62,11 @@ The integration refreshes Healthchecks.io check data every five minutes. When a 
 - Report problems or request features through the [issue tracker][issues].
 - Contributions are welcome. See the [contribution guidelines](CONTRIBUTING.md).
 
+## Prior Contributions
+
+- Forked from [custom-components/healthchecksio](https://github.com/custom-components/healthchecksio)
+- Current Author: [Snuffy2](https://github.com/Snuffy2)
+
 ## License
 
 This project is available under the [MIT License][license].
