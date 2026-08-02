@@ -1,15 +1,19 @@
 # artifacts
 __pycache__
+.mypy_cache
 .pytest*
+.venv
 *.egg-info
 */build/*
 */dist/*
+uv.lock
 
 
 # misc
 .coverage
 .vscode
 coverage.xml
+htmlcov
 .ruff_cache
 
 

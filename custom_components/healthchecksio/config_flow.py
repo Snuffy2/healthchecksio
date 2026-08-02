@@ -8,13 +8,12 @@ import logging
 from typing import Any
 
 from aiohttp import ClientError, ClientSession, ClientTimeout
-import voluptuous as vol
-
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_API_KEY
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+import voluptuous as vol
 
 from .const import (
     CONF_CREATE_BINARY_SENSOR,

@@ -1,76 +1,79 @@
-# HealthChecks.io Home Assistant Integration (by Snuffy2)
+# HealthChecks.io Home Assistant Integration
 
 [![GitHub Release][releases-shield]][releases]
 [![GitHub Activity][commits-shield]][commits]
-[![License][license-shield]](LICENSE.md)
+[![License][license-shield]][license]
+[![HACS][hacs-shield]][hacs]
 
-[![hacs][hacsbadge]](hacs)
+Monitor your [Healthchecks.io][healthchecksio] checks directly in Home Assistant. The integration can create entities for your checks and optionally ping one check every five minutes to monitor Home Assistant itself.
 
-_Integration to integrate with [healthchecks.io][healthchecksio]_
+![Example Home Assistant entities](example.png)
 
-![exampleimg]
+## Features
 
-## HACS Installation
+- Creates sensors, binary sensors, or both for checks in a Healthchecks.io project.
+- Optionally pings a selected check every five minutes.
+- Supports the hosted Healthchecks.io service and self-hosted instances.
+- Configures entirely through the Home Assistant UI.
 
-In HACS, add this as a custom repository: 
-`https://github.com/Snuffy2/healthchecksio`
+## Installation
 
-Search for and install `HealthChecks.io (by Snuffy2)` from [HACS](https://hacs.xyz/)
+1. In Home Assistant, open HACS.
+2. Open the three-dot menu and select **Custom repositories**.
+3. Add `https://github.com/Snuffy2/healthchecksio` and select the **Integration** category.
+4. Find **HealthChecks.io (by Snuffy2)** in HACS and select **Download**.
+5. Restart Home Assistant if prompted.
+
+For more detail, see the [HACS custom repository instructions][hacs-custom-repositories].
 
 ## Configuration
 
-This integration can **only** be configured via the UI
+1. In Home Assistant, go to **Settings** → **Devices & services**.
+2. Select **Add integration**, then search for **HealthChecks.io (by Snuffy2)**.
+3. Enter the requested details.
 
+### API key
 
-### API Key
-
-The API key to your account. You can find it under the "Settings" tab in your project
-
-> A **Full Access** API key is required for this integration to function correctly. This is because the integration both pings checks (which requires write access) and reads the status of all your checks to create entities in Home Assistant (which requires read access). Only the Full Access key provides both permissions needed for these operations.
+Enter a read-write API key for the Healthchecks.io project you want to monitor. Create or view project API keys in **Project Settings** in Healthchecks.io.
 
 ### Ping UUID
 
-_Optional._ This is the ID of the check that the integration should update. It looks something like `aa247c51-8da8-4800-86a3-48763142e902`
+Optional. Enter the UUID of a Healthchecks.io check when you want Home Assistant to ping that check every five minutes. This is useful for monitoring Home Assistant itself.
 
-### Create Binary Sensors and/or Sensors
+### Entity types
 
-Must select one of these (or both)
+Select **Create Binary Sensors**, **Create Sensors**, or both. At least one entity type is required.
 
-## For self-hosted instances
+### Self-hosted instances
 
-### Site Root
+Enable **Use self-hosted instance** to configure a self-hosted Healthchecks.io server:
 
-This is the root URL of your Healthchecks.io instance
+- **Site Root**: The full base URL of the instance, including `http://` or `https://`.
+- **Ping Endpoint**: The full base URL used for pings, for example `https://healthchecks.example.com/ping`. The integration appends the Ping UUID when it sends a ping.
 
-### Ping Endpoint
+Leave this option disabled for the hosted service. It uses `https://healthchecks.io` for check data and `https://hc-ping.com` for pings.
 
-_Optional._ This is the path of the endpoint used for pings. If not set, defaults to: `site_root + /ping`
+## How it works
 
-## What the integration does
+The integration refreshes Healthchecks.io check data every five minutes. When a Ping UUID is configured, it sends that ping before refreshing the entities. Sensors report the check status, and binary sensors provide a quick connectivity-style view of each check.
 
-* If Ping UUID is set, pings the specified Healthchecks.io check every 5 minutes to monitor the state of Home Assistant
+## Support and contributions
 
-* Pulls your other Healthchecks.io checks as entities, so you can monitor their statuses directly in Home Assistant
+- Report problems or request features through the [issue tracker][issues].
+- Contributions are welcome. See the [contribution guidelines](CONTRIBUTING.md).
 
-## Prior Contributions:
+## License
 
-* Forked from [custom-components/healthchecksio](https://github.com/custom-components/healthchecksio)
+This project is available under the [MIT License][license].
 
-* Current Author: [Snuffy2](https://github.com/Snuffy2)
-
-## Contributions are welcome!
-
-If you want to contribute to this please read the [Contribution guidelines](CONTRIBUTING.md)
-
-***
-
-[healthchecksio]: https://healthchecks.io
 [commits-shield]: https://img.shields.io/github/commit-activity/y/Snuffy2/healthchecksio.svg?style=for-the-badge
-[commits]: https://github.com/Snuffy2/healthchecksio/commits/master
+[commits]: https://github.com/Snuffy2/healthchecksio/commits/main
+[hacs-custom-repositories]: https://www.hacs.xyz/docs/faq/custom_repositories/
+[hacs-shield]: https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge
 [hacs]: https://hacs.xyz/
-[hacsbadge]: https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge
-[exampleimg]: example.png
-[forum-shield]: https://img.shields.io/badge/community-forum-brightgreen.svg?style=for-the-badge
+[healthchecksio]: https://healthchecks.io/
+[issues]: https://github.com/Snuffy2/healthchecksio/issues
 [license-shield]: https://img.shields.io/github/license/Snuffy2/healthchecksio.svg?style=for-the-badge
+[license]: LICENSE
 [releases-shield]: https://img.shields.io/github/release/Snuffy2/healthchecksio.svg?style=for-the-badge
 [releases]: https://github.com/Snuffy2/healthchecksio/releases

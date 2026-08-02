@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+jobs:
+  update_version_and_create_zip:
+    name: Update Version and Create Zip on Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          # Use the release branch when available so git-auto-commit can push
+          # back cleanly; otherwise keep the workflow's triggering ref.
+          ref: ${{ github.event_name == 'release' && github.event.release.target_commitish || github.ref }}
+
+      - name: Update Version Files
+        if: ${{ github.event_name == 'release' && github.event.release.draft == false }}
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: python .github/scripts/update_release_version.py
+
+      - name: Commit & Push Version Changes
+        if: ${{ github.event_name == 'release' && github.event.release.draft == false && github.event.release.prerelease == false }}
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          TARGET_BRANCH: ${{ github.event.release.target_commitish }}
+        run: |
+          case "${RELEASE_TAG}" in
+            ""|-*) echo "Invalid release tag" >&2; exit 1 ;;
+          esac
+          git check-ref-format "refs/tags/${RELEASE_TAG}"
+          git check-ref-format "refs/heads/${TARGET_BRANCH}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add custom_components/healthchecksio/manifest.json custom_components/healthchecksio/const.py
+          if ! git diff --cached --quiet; then
+            git commit -m "Updating to version ${RELEASE_TAG} [skip ci]"
+            git push origin "HEAD:refs/heads/${TARGET_BRANCH}"
+          fi
+          git tag -f -- "${RELEASE_TAG}"
+          git push --force origin "refs/tags/${RELEASE_TAG}"
+
+      - name: Create Zip
+        run: |
+          cd ${{ github.workspace }}/custom_components/healthchecksio
+          zip healthchecksio.zip -r ./
+
+      - name: Upload Zip to Release
+        if: ${{ github.event_name == 'release' && github.event.release.draft == false }}
+        uses: softprops/action-gh-release@v3
+        with:
+          files: ./custom_components/healthchecksio/healthchecksio.zip
+          tag_name: ${{ github.event.release.tag_name }}
+
+      - name: Add Zip to Action
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: healthchecksio
+          path: ./custom_components/healthchecksio/healthchecksio.zip
+          if-no-files-found: error

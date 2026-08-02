@@ -1,50 +1,47 @@
-# Contribution guidelines
+# Contributing
 
-Contributing to this project should be as easy and transparent as possible, whether it's:
+Thanks for helping improve the HealthChecks.io Home Assistant integration. Contributions can include bug reports, documentation improvements, tests, and focused code changes.
 
-- Reporting a bug
-- Discussing the current state of the code
-- Submitting a fix
-- Proposing new features
+## Report a bug or request a feature
 
-## Github is used for everything
+- Search existing [issues](../../issues) before opening a new one.
+- Use the available issue template and include Home Assistant version, integration version, relevant logs with secrets removed, and clear steps to reproduce the problem.
+- Describe the expected behavior and what happened instead.
 
-Github is used to host code, to track issues and feature requests, as well as accept pull requests.
+## Make a change
 
-Pull requests are the best way to propose changes to the codebase.
+1. Fork the repository and create a branch from `main`.
+2. Keep the change focused. Update documentation and translations when user-facing behavior changes.
+3. Set up the development environment:
 
-1. Fork the repo and create your branch from `master`.
-2. If you've changed something, update the documentation.
-3. Make sure your code lints (using black).
-4. Issue that pull request!
+   ```sh
+   uv venv .venv
+   uv sync --group dev
+   ```
 
-## Any contributions you make will be under the MIT Software License
+4. Add or update focused tests for behavior changes. Test files belong in `tests/`.
+5. Run the repository checks:
 
-In short, when you submit code changes, your submissions are understood to be under the same [MIT License](http://choosealicense.com/licenses/mit/) that covers the project. Feel free to contact the maintainers if that's a concern.
+   ```sh
+   ./.venv/bin/prek run --all-files
+   ```
 
-## Report bugs using Github's [issues](../../issues)
+   For behavior changes, run the test suite after adding or updating tests:
 
-GitHub issues are used to track public bugs.  
-Report a bug by [opening a new issue](../../issues/new/choose); it's that easy!
+   ```sh
+   ./.venv/bin/pytest
+   ```
 
-## Write bug reports with detail, background, and sample code
+6. Open a pull request with a concise summary, the reason for the change, and the validation you ran.
 
-**Great Bug Reports** tend to have:
+## Code and documentation expectations
 
-- A quick summary and/or background
-- Steps to reproduce
-  - Be specific!
-  - Give sample code if you can.
-- What you expected would happen
-- What actually happens
-- Notes (possibly including why you think this might be happening, or stuff you tried that didn't work)
-
-People *love* thorough bug reports. I'm not even kidding.
-
-## Use a Consistent Coding Style
-
-Use [black](https://github.com/ambv/black) to make sure the code follows the style.
+- Support Python 3.14 and the latest Home Assistant Core.
+- Keep Healthchecks.io requests asynchronous and use Home Assistant's shared `aiohttp` sessions.
+- Add type annotations and Google-style docstrings for changed code.
+- Use the configured `prek` hooks for formatting, linting, spelling, mypy, and GitHub Actions validation. Do not run Black; Ruff provides the repository's formatting.
+- Do not include API keys, ping UUIDs, or full config-entry data in commits, logs, screenshots, or issue reports.
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under its MIT License.
+By contributing, you agree that your contributions are licensed under the [MIT License](LICENSE).

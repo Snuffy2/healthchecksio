@@ -96,7 +96,8 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
     if version > 2:
         # This means the user has downgraded from a future version
         _LOGGER.error(
-            "HealthChecks.io downgraded and current config not compatible with earlier versions. Integration must be removed and reinstalled."
+            "HealthChecks.io downgraded and current config not compatible with earlier "
+            "versions. Integration must be removed and reinstalled."
         )
         return False
 
@@ -116,12 +117,12 @@ def _migrate_1_to_2(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     entity_registry = er.async_get(hass)
     data = dict(config_entry.data)
 
-    CONF_CHECK = "check"
+    conf_check = "check"
 
     data[CONF_CREATE_BINARY_SENSOR] = True
     data[CONF_CREATE_SENSOR] = False
-    data[CONF_PING_UUID] = data.get(CONF_CHECK)
-    data.pop(CONF_CHECK, None)
+    data[CONF_PING_UUID] = data.get(conf_check)
+    data.pop(conf_check, None)
     if data.get(CONF_SELF_HOSTED):
         ping_endpoint = f"{data.get(CONF_SITE_ROOT)}/{data.get(CONF_PING_ENDPOINT)}"
         data[CONF_PING_ENDPOINT] = clean_url(ping_endpoint)
@@ -175,8 +176,8 @@ def _migrate_1_to_2(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
         config_entry, data=data, unique_id=new_device_unique_id, version=2
     )
     if new_entry_bool:
-        _LOGGER.debug("[migrate_1_to_2] config_entry update sucessful")
+        _LOGGER.debug("[migrate_1_to_2] config_entry update successful")
     else:
-        _LOGGER.error("Migration of config_entry to version 2 unsucessful")
+        _LOGGER.error("Migration of config_entry to version 2 unsuccessful")
         return False
     return True

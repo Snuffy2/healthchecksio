@@ -40,4 +40,4 @@ labels:
   - label: "code-quality"
     title: "(?i).*mypy.*"
   - label: "code-quality"
-    title: "(?i).*pre[ -_]commit.*"
+    title: "(?i).*(prek|pre[ -_]commit).*"
