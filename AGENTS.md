@@ -55,7 +55,6 @@
 - Run the complete pytest suite by default with `./.venv/bin/pytest`. Explain why if a targeted run is more appropriate.
 - This repository currently has no test suite. When changing behavior, add focused Home Assistant tests under `tests/` with fixtures in `tests/conftest.py` rather than relying only on manual testing.
 - Use `uv build --out-dir "${TMPDIR:-/tmp}/healthchecksio-build-check"` when package metadata or distribution contents change.
-- Do not recommend `tox`; it is not used here.
 
 ## Testing Expectations
 
@@ -66,7 +65,6 @@
 
 ## Workflows and Releases
 
-- `linters.yml` runs the repository's `prek` configuration.
 - `validate.yml` runs Hassfest and HACS validation.
 - `prek_autoupdate.yml` maintains hook revisions. Keep its permissions and `Snuffy2/prek-autoupdate@v2` contract intact.
 - `prek-autofix-review.yml` analyzes pull requests with read-only permissions. `prek-autofix-fix.yml` is the separately trusted workflow-run consumer that can apply an approved artifact using `PREK_AUTOFIX_TOKEN`; do not combine their trust boundaries or run PR code in the privileged workflow.
@@ -74,9 +72,7 @@
 
 ## Git, Branches, and Pull Requests
 
-- Create branches, commits, pushes, and pull requests only when authorized by the current user request.
-- Feature branches must track same-named branches on `origin`, never `upstream/main`.
-- Before reporting a branch as ready or published, verify `git status --short --branch`, `git branch -vv`, and `git rev-parse --abbrev-ref --symbolic-full-name @{u}`.
+- Create branches, pushes, and pull requests only when authorized by the current user request.
 - Do not open a pull request autonomously.
 
 ## Documentation and Change Scope
