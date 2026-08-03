@@ -17,13 +17,45 @@ from .const import (
     CONF_PING_UUID,
     CONF_SELF_HOSTED,
     CONF_SITE_ROOT,
+    DEFAULT_CREATE_BINARY_SENSOR,
+    DEFAULT_CREATE_SENSOR,
     DEFAULT_PING_ENDPOINT,
     DEFAULT_SITE_ROOT,
+    PLATFORMS,
 )
 from .coordinator import HealthchecksioDataUpdateCoordinator
-from .helpers import clean_url
+from .helpers import clean_url, get_entity_type_option
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
+
+
+def _get_enabled_platforms(config_entry: ConfigEntry) -> list[Platform]:
+    """Return platforms enabled by the current config-entry options."""
+    platforms: list[Platform] = []
+    if get_entity_type_option(
+        config_entry,
+        CONF_CREATE_BINARY_SENSOR,
+        DEFAULT_CREATE_BINARY_SENSOR,
+    ):
+        platforms.append(Platform.BINARY_SENSOR)
+    if get_entity_type_option(config_entry, CONF_CREATE_SENSOR, DEFAULT_CREATE_SENSOR):
+        platforms.append(Platform.SENSOR)
+    return platforms
+
+
+def _remove_deselected_entities(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
+    """Remove registry entries and states for platforms no longer selected."""
+    enabled_platforms = {platform.value for platform in _get_enabled_platforms(config_entry)}
+    entity_registry = er.async_get(hass)
+
+    for entity in er.async_entries_for_config_entry(entity_registry, config_entry.entry_id):
+        platform = entity.entity_id.partition(".")[0]
+        if platform not in {Platform.BINARY_SENSOR.value, Platform.SENSOR.value}:
+            continue
+        if platform in enabled_platforms:
+            continue
+        entity_registry.async_remove(entity.entity_id)
+        hass.states.async_remove(entity.entity_id)
 
 
 async def async_setup_entry(
@@ -35,11 +67,7 @@ async def async_setup_entry(
 
     site_root: str = config_entry.data[CONF_SITE_ROOT]
     ping_endpoint: str = config_entry.data[CONF_PING_ENDPOINT]
-    platforms: list[Platform] = []
-    if config_entry.data.get(CONF_CREATE_BINARY_SENSOR):
-        platforms.append(Platform.BINARY_SENSOR)
-    if config_entry.data.get(CONF_CREATE_SENSOR):
-        platforms.append(Platform.SENSOR)
+    platforms = _get_enabled_platforms(config_entry)
 
     # Configure the client.
     coordinator: HealthchecksioDataUpdateCoordinator = HealthchecksioDataUpdateCoordinator(
@@ -60,6 +88,7 @@ async def async_setup_entry(
     config_entry.runtime_data = coordinator
 
     await coordinator.async_config_entry_first_refresh()
+    _remove_deselected_entities(hass, config_entry)
     await hass.config_entries.async_forward_entry_setups(config_entry, platforms)
 
     return True
@@ -72,19 +101,14 @@ async def async_unload_entry(
     """Unload a config entry."""
     _LOGGER.debug("Unloading Config Entry: %s", config_entry.as_dict())
 
-    platforms: list[Platform] = []
-    if config_entry.data.get(CONF_CREATE_BINARY_SENSOR):
-        platforms.append(Platform.BINARY_SENSOR)
-    if config_entry.data.get(CONF_CREATE_SENSOR):
-        platforms.append(Platform.SENSOR)
-
-    _LOGGER.debug("Unloading Platforms: %s", platforms)
+    _LOGGER.debug("Unloading Platforms: %s", PLATFORMS)
     unload_ok = await hass.config_entries.async_unload_platforms(
         config_entry,
-        platforms,
+        PLATFORMS,
     )
 
     if unload_ok:
+        _remove_deselected_entities(hass, config_entry)
         _LOGGER.info("Successfully removed the HealthChecks.io integration")
     return unload_ok
 
@@ -190,7 +214,7 @@ def _migrate_1_to_2(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
 
 
 def _migrate_2_to_3(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
-    """Scope existing entity unique IDs to their config entry."""
+    """Scope entity IDs and move entity-type settings into options."""
     entity_registry = er.async_get(hass)
 
     for entity in er.async_entries_for_config_entry(entity_registry, config_entry.entry_id):
@@ -213,4 +237,17 @@ def _migrate_2_to_3(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
             )
             return False
 
-    return bool(hass.config_entries.async_update_entry(config_entry, version=3))
+    data = dict(config_entry.data)
+    options = dict(config_entry.options)
+    create_binary_sensor = data.pop(CONF_CREATE_BINARY_SENSOR, DEFAULT_CREATE_BINARY_SENSOR)
+    create_sensor = data.pop(CONF_CREATE_SENSOR, DEFAULT_CREATE_SENSOR)
+    options.setdefault(CONF_CREATE_BINARY_SENSOR, create_binary_sensor)
+    options.setdefault(CONF_CREATE_SENSOR, create_sensor)
+    return bool(
+        hass.config_entries.async_update_entry(
+            config_entry,
+            data=data,
+            options=options,
+            version=3,
+        )
+    )

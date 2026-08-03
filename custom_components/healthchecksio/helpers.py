@@ -5,6 +5,13 @@ from __future__ import annotations
 import re
 from urllib.parse import ParseResult, urlparse, urlunparse
 
+from homeassistant.config_entries import ConfigEntry
+
+
+def get_entity_type_option(config_entry: ConfigEntry, option: str, default: bool) -> bool:
+    """Return an entity-type option, falling back to legacy entry data."""
+    return config_entry.options.get(option, config_entry.data.get(option, default))
+
 
 def clean_url(url: str) -> str:
     """Cleanup slashes from URL."""

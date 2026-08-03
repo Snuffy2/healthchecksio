@@ -9,7 +9,14 @@ from pytest_homeassistant_custom_component.common import (  # type: ignore[impor
     MockConfigEntry,
 )
 
-from custom_components.healthchecksio.const import ATTR_LAST_PING, ATTR_STATUS, ATTRIBUTION, DOMAIN
+from custom_components.healthchecksio.const import (
+    ATTR_LAST_PING,
+    ATTR_STATUS,
+    ATTRIBUTION,
+    CONF_CREATE_BINARY_SENSOR,
+    CONF_CREATE_SENSOR,
+    DOMAIN,
+)
 
 from .conftest import API_KEY, CHECK_UUID, CHECKS_RESPONSE, CHECKS_URL, PING_URL
 
@@ -101,3 +108,79 @@ async def test_multiple_entries_create_separate_entities(
     assert first_entity_id != second_entity_id
     assert hass.states.get(first_entity_id) is not None
     assert hass.states.get(second_entity_id) is not None
+
+
+async def test_entry_setup_uses_entity_type_options(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    entry_data: dict[str, str | bool],
+) -> None:
+    """Use entity-type options in preference to the initial configuration values."""
+    aioclient_mock.get(PING_URL, status=200)
+    aioclient_mock.get(CHECKS_URL, json=CHECKS_RESPONSE)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            key: value
+            for key, value in entry_data.items()
+            if key not in (CONF_CREATE_BINARY_SENSOR, CONF_CREATE_SENSOR)
+        },
+        options={
+            CONF_CREATE_BINARY_SENSOR: False,
+            CONF_CREATE_SENSOR: True,
+        },
+        unique_id=API_KEY,
+        version=3,
+    )
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert hass.states.get("sensor.healthchecksio_database_backup") is not None
+    assert hass.states.get("binary_sensor.healthchecksio_database_backup") is None
+
+
+async def test_reloading_removes_deselected_platform_entities(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    entry_data: dict[str, str | bool],
+) -> None:
+    """Delete the registry entry and state for a platform removed from options."""
+    aioclient_mock.get(PING_URL, status=200)
+    aioclient_mock.get(CHECKS_URL, json=CHECKS_RESPONSE)
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data, unique_id=API_KEY, version=3)
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    binary_sensor_unique_id = f"{entry.entry_id}_{Platform.BINARY_SENSOR}_{CHECK_UUID}"
+    binary_sensor_entity_id = registry.async_get_entity_id(
+        Platform.BINARY_SENSOR,
+        DOMAIN,
+        binary_sensor_unique_id,
+    )
+    assert binary_sensor_entity_id is not None
+    unrelated_entity = registry.async_get_or_create(
+        Platform.SWITCH,
+        DOMAIN,
+        "unrelated",
+        config_entry=entry,
+    )
+
+    hass.config_entries.async_update_entry(
+        entry,
+        options={
+            CONF_CREATE_BINARY_SENSOR: False,
+            CONF_CREATE_SENSOR: True,
+        },
+    )
+
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert registry.async_get(binary_sensor_entity_id) is None
+    assert hass.states.get(binary_sensor_entity_id) is None
+    assert registry.async_get(unrelated_entity.entity_id) is not None
