@@ -8,17 +8,12 @@ from homeassistant.components.binary_sensor import BinarySensorDeviceClass, Bina
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_ATTRIBUTION, ATTR_NAME, Platform
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.entity import generate_entity_id
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
-import homeassistant.helpers.entity_registry as er
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     ATTR_LAST_PING,
     ATTR_STATUS,
     ATTRIBUTION,
-    DOMAIN,
     ICON_DEFAULT,
     ICON_DOWN,
     ICON_GRACE,
@@ -26,11 +21,11 @@ from .const import (
     ICON_UP,
 )
 from .coordinator import HealthchecksioDataUpdateCoordinator
+from .entity import HealthchecksioEntity
 
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORM = Platform.BINARY_SENSOR
-ENTITY_ID_FORMAT = PLATFORM + ".{}"
 
 
 async def async_setup_entry(
@@ -52,13 +47,8 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class HealthchecksioBinarySensor(CoordinatorEntity, BinarySensorEntity):
+class HealthchecksioBinarySensor(HealthchecksioEntity, BinarySensorEntity):
     """HealthChecks.io binary sensor class."""
-
-    @property
-    def available(self) -> bool:
-        """Return whether the coordinator and this check are available."""
-        return self.coordinator.last_update_success and self._attr_available
 
     def __init__(
         self,
@@ -68,35 +58,11 @@ class HealthchecksioBinarySensor(CoordinatorEntity, BinarySensorEntity):
         coordinator: HealthchecksioDataUpdateCoordinator,
     ) -> None:
         """Initialize the binary sensor."""
-        super().__init__(coordinator)
-        self.hass: HomeAssistant = hass
-        self._attr_available = False
-        self._ping_uuid: str = ping_uuid
-        self._attr_name: str = name
+        super().__init__(hass, ping_uuid, name, coordinator, PLATFORM)
         self._attr_device_class: BinarySensorDeviceClass = BinarySensorDeviceClass.CONNECTIVITY
         self._attr_extra_state_attributes: dict[str, Any] = {}
         self._attr_is_on: bool | None = None
         self._attr_icon: str = ICON_DEFAULT
-        self._attr_unique_id: str = f"binary_sensor_{ping_uuid}"
-
-        registry = er.async_get(self.hass)
-        current_entity_id = registry.async_get_entity_id(PLATFORM, DOMAIN, self._attr_unique_id)
-        if current_entity_id is not None:
-            self.entity_id = current_entity_id
-        else:
-            self.entity_id = generate_entity_id(
-                ENTITY_ID_FORMAT, f"healthchecksio_{name}", hass=self.hass
-            )
-
-        self._attr_device_info: DeviceInfo | None = {
-            "identifiers": {(DOMAIN, coordinator.config_entry.entry_id)},
-            "name": "HealthChecks.io",
-        }
-
-    async def async_added_to_hass(self) -> None:
-        """Run once integration has been added to HA."""
-        await super().async_added_to_hass()
-        self._handle_coordinator_update()
 
     @callback
     def _handle_coordinator_update(self) -> None:

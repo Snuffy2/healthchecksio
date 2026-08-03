@@ -13,6 +13,7 @@ from pytest_homeassistant_custom_component.common import (  # type: ignore[impor
 )
 
 from custom_components.healthchecksio import async_unload_entry
+from custom_components.healthchecksio.binary_sensor import HealthchecksioBinarySensor
 from custom_components.healthchecksio.const import (
     ATTR_LAST_PING,
     ATTR_STATUS,
@@ -24,8 +25,16 @@ from custom_components.healthchecksio.const import (
     ICON_DOWN,
     ICON_PAUSED,
 )
+from custom_components.healthchecksio.entity import HealthchecksioEntity
+from custom_components.healthchecksio.sensor import HealthchecksioSensor
 
 from .conftest import API_KEY, CHECKS_RESPONSE, CHECKS_URL, PING_URL
+
+
+def test_platform_entities_inherit_the_shared_entity_base() -> None:
+    """Use the common Healthchecks.io entity implementation on every platform."""
+    assert issubclass(HealthchecksioBinarySensor, HealthchecksioEntity)
+    assert issubclass(HealthchecksioSensor, HealthchecksioEntity)
 
 
 async def test_unload_returns_false_when_platform_unload_fails(
