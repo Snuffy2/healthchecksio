@@ -2,16 +2,16 @@
 
 [Full report](https://htmlpreview.github.io/?https://github.com/Snuffy2/healthchecksio/blob/python-coverage-comment-action-data/htmlcov/index.html)
 
-| Name                                                |    Stmts |     Miss |   Branch |   BrPart |   Cover |   Missing |
-|---------------------------------------------------- | -------: | -------: | -------: | -------: | ------: | --------: |
-| custom\_components/healthchecksio/\_\_init\_\_.py   |       82 |       43 |       24 |        3 |     43% |39-\>41, 76-\>78, 87-\>89, 94-113, 117-183 |
-| custom\_components/healthchecksio/binary\_sensor.py |       66 |        6 |        8 |        4 |     86% |80, 106-108, 113, 131 |
-| custom\_components/healthchecksio/config\_flow.py   |      102 |       17 |       32 |       13 |     78% |60-67, 72-75, 81-87, 90-91, 102, 103-\>105, 106, 150-\>152, 152-\>155, 191, 193-\>221, 219, 235, 248 |
-| custom\_components/healthchecksio/const.py          |       27 |        0 |        0 |        0 |    100% |           |
-| custom\_components/healthchecksio/coordinator.py    |       48 |       11 |        8 |        3 |     75% |63-64, 72, 84-98, 100-101, 104-\>103 |
-| custom\_components/healthchecksio/helpers.py        |       12 |        1 |        4 |        2 |     81% |14, 17-\>20 |
-| custom\_components/healthchecksio/sensor.py         |       65 |        5 |        6 |        3 |     89% |82, 108-110, 129 |
-| **TOTAL**                                           |  **402** |   **83** |   **82** |   **28** | **74%** |           |
+| Name                                                |    Stmts |     Miss |   Branch |   BrPart |    Cover |   Missing |
+|---------------------------------------------------- | -------: | -------: | -------: | -------: | -------: | --------: |
+| custom\_components/healthchecksio/\_\_init\_\_.py   |       82 |        0 |       24 |        0 |     100% |           |
+| custom\_components/healthchecksio/binary\_sensor.py |       69 |        0 |        8 |        0 |     100% |           |
+| custom\_components/healthchecksio/config\_flow.py   |      102 |        0 |       32 |        0 |     100% |           |
+| custom\_components/healthchecksio/const.py          |       27 |        0 |        0 |        0 |     100% |           |
+| custom\_components/healthchecksio/coordinator.py    |       48 |        0 |        8 |        0 |     100% |           |
+| custom\_components/healthchecksio/helpers.py        |       12 |        0 |        4 |        0 |     100% |           |
+| custom\_components/healthchecksio/sensor.py         |       68 |        0 |        6 |        0 |     100% |           |
+| **TOTAL**                                           |  **408** |    **0** |   **82** |    **0** | **100%** |           |
 
 
 ## Setup coverage badge
