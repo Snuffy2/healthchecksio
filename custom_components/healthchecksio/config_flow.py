@@ -9,7 +9,7 @@ from typing import Any
 
 from aiohttp import ClientError, ClientSession, ClientTimeout
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult
-from homeassistant.const import CONF_API_KEY
+from homeassistant.const import CONF_API_KEY, CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -111,6 +111,13 @@ def _build_user_input_schema(
                     CONF_API_KEY,
                     default=user_input.get(CONF_API_KEY, fallback.get(CONF_API_KEY, "")),
                 ): str,
+                vol.Optional(
+                    CONF_NAME,
+                    default=user_input.get(
+                        CONF_NAME,
+                        fallback.get(CONF_NAME, INTEGRATION_NAME),
+                    ),
+                ): str,
             }
         )
     return schema.extend(
@@ -168,6 +175,12 @@ def _build_self_hosted_schema(
     )
 
 
+def _get_entry_title(data: Mapping[str, Any]) -> str:
+    """Return the configured entry title or the integration name."""
+    name = data.get(CONF_NAME)
+    return name.strip() if isinstance(name, str) and name.strip() else INTEGRATION_NAME
+
+
 class HealthchecksioConfigFlow(ConfigFlow, domain=DOMAIN):
     """Config flow for HealthChecks.io integration."""
 
@@ -212,7 +225,9 @@ class HealthchecksioConfigFlow(ConfigFlow, domain=DOMAIN):
                     ping_uuid=user_input.get(CONF_PING_UUID),
                 )
                 if valid:
-                    return self.async_create_entry(title=INTEGRATION_NAME, data=user_input)
+                    return self.async_create_entry(
+                        title=_get_entry_title(user_input), data=user_input
+                    )
                 self._errors["base"] = "auth"
 
         return self.async_show_form(
@@ -241,7 +256,7 @@ class HealthchecksioConfigFlow(ConfigFlow, domain=DOMAIN):
             if valid:
                 # merge data from initial config flow and this flow
                 data: MutableMapping[str, Any] = {**self._initial_data, **user_input}
-                return self.async_create_entry(title=INTEGRATION_NAME, data=data)
+                return self.async_create_entry(title=_get_entry_title(data), data=data)
             self._errors["base"] = "auth_self"
 
         return self.async_show_form(

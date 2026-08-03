@@ -38,6 +38,10 @@ Repeat these steps to add another Healthchecks.io project or self-hosted instanc
 
 Enter a read-write API key for the Healthchecks.io project you want to monitor. Create or view project API keys in **Project Settings** in Healthchecks.io.
 
+### Name
+
+Optional. Use a name to distinguish this configuration in **Devices & services**. It defaults to `HealthChecks.io`.
+
 ### Ping UUID
 
 Optional. Enter the UUID of a Healthchecks.io check when you want Home Assistant to ping that check every five minutes. This is useful for monitoring Home Assistant itself.

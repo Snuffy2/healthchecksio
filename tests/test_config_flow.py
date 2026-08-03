@@ -4,6 +4,7 @@ from typing import Any
 
 from aiohttp import ClientConnectionError
 from homeassistant.config_entries import SOURCE_USER
+from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 import pytest
@@ -100,6 +101,7 @@ async def test_self_hosted_flow_normalizes_urls_before_validating(
         context={"source": SOURCE_USER},
         data={
             "api_key": API_KEY,
+            CONF_NAME: "Self-hosted",
             CONF_CREATE_BINARY_SENSOR: True,
             CONF_CREATE_SENSOR: False,
             CONF_PING_UUID: PING_UUID,
@@ -116,6 +118,7 @@ async def test_self_hosted_flow_normalizes_urls_before_validating(
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "Self-hosted"
     assert result["data"][CONF_SITE_ROOT] == "http://healthchecks.example.test/healthchecks"
     assert result["data"][CONF_PING_ENDPOINT] == "http://healthchecks.example.test/ping"
 
@@ -207,6 +210,7 @@ async def test_user_form_defaults_and_allows_another_api_key(
     """Expose stable defaults and allow a second API key to be configured."""
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
     defaults = result["data_schema"]({})
+    assert defaults[CONF_NAME] == INTEGRATION_NAME
     assert defaults[CONF_PING_UUID] == ""
     assert defaults[CONF_CREATE_BINARY_SENSOR] is True
     assert defaults[CONF_CREATE_SENSOR] is False
@@ -218,10 +222,15 @@ async def test_user_form_defaults_and_allows_another_api_key(
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
         context={"source": SOURCE_USER},
-        data={**_hosted_input(ping_uuid=None), "api_key": "another-api-key"},
+        data={
+            **_hosted_input(ping_uuid=None),
+            "api_key": "another-api-key",
+            CONF_NAME: "Secondary",
+        },
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "Secondary"
     assert result["data"]["api_key"] == "another-api-key"
 
 
@@ -267,6 +276,7 @@ def test_schema_helpers_apply_fallback_values() -> None:
     """Use existing entry data as defaults when no submitted values exist."""
     fallback = {
         "api_key": API_KEY,
+        CONF_NAME: "Existing entry",
         CONF_PING_UUID: PING_UUID,
         CONF_CREATE_BINARY_SENSOR: False,
         CONF_CREATE_SENSOR: True,
@@ -278,6 +288,7 @@ def test_schema_helpers_apply_fallback_values() -> None:
         key: fallback[key]
         for key in (
             "api_key",
+            CONF_NAME,
             CONF_PING_UUID,
             CONF_CREATE_BINARY_SENSOR,
             CONF_CREATE_SENSOR,
