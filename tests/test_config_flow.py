@@ -2,10 +2,20 @@
 
 from typing import Any
 
+from aiohttp import ClientConnectionError
 from homeassistant.config_entries import SOURCE_USER
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+import pytest
+from pytest_homeassistant_custom_component.common import (  # type: ignore[import-untyped]
+    MockConfigEntry,
+)
 
+from custom_components.healthchecksio.config_flow import (
+    HealthchecksioConfigFlow,
+    _build_self_hosted_schema,
+    _build_user_input_schema,
+)
 from custom_components.healthchecksio.const import (
     CONF_CREATE_BINARY_SENSOR,
     CONF_CREATE_SENSOR,
@@ -18,8 +28,22 @@ from custom_components.healthchecksio.const import (
     DOMAIN,
     INTEGRATION_NAME,
 )
+from custom_components.healthchecksio.helpers import clean_url
 
 from .conftest import API_KEY, CHECKS_RESPONSE, PING_UUID
+
+
+def _hosted_input(*, ping_uuid: str | None = PING_UUID) -> dict[str, Any]:
+    """Return valid hosted-service user input."""
+    data = {
+        "api_key": API_KEY,
+        CONF_CREATE_BINARY_SENSOR: True,
+        CONF_CREATE_SENSOR: False,
+        CONF_SELF_HOSTED: False,
+    }
+    if ping_uuid is not None:
+        data[CONF_PING_UUID] = ping_uuid
+    return data
 
 
 async def test_hosted_flow_creates_entry_after_check_and_ping_validation(
@@ -112,3 +136,156 @@ async def test_flow_requires_at_least_one_entity_type(hass: HomeAssistant) -> No
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "user"
     assert result["errors"] == {"base": "need_a_sensor"}
+
+
+@pytest.mark.parametrize(
+    ("ping_status", "ping_exception"),
+    [(503, None), (None, ClientConnectionError("ping unavailable"))],
+)
+async def test_hosted_flow_rejects_failed_ping(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    ping_status: int | None,
+    ping_exception: ClientConnectionError | None,
+) -> None:
+    """Reject credentials when the optional ping cannot be delivered."""
+    monkeypatch.setattr(
+        "custom_components.healthchecksio.config_flow.asyncio.sleep", lambda _: _noop()
+    )
+    aioclient_mock.get(
+        f"{DEFAULT_PING_ENDPOINT}/{PING_UUID}",
+        status=ping_status or 200,
+        exc=ping_exception,
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}, data=_hosted_input()
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "auth"}
+
+
+async def _noop() -> None:
+    """Provide an awaitable no-op for the self-hosted ping delay."""
+
+
+@pytest.mark.parametrize(
+    ("status", "exception"),
+    [
+        (503, None),
+        (None, TimeoutError("checks timed out")),
+        (None, ClientConnectionError("checks unavailable")),
+    ],
+)
+async def test_hosted_flow_rejects_failed_checks_request(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    status: int | None,
+    exception: BaseException | None,
+) -> None:
+    """Reject credentials for each checks-endpoint failure mode."""
+    aioclient_mock.get(
+        f"{DEFAULT_SITE_ROOT}/api/v1/checks/",
+        status=status or 200,
+        exc=exception,
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}, data=_hosted_input(ping_uuid=None)
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "auth"}
+
+
+async def test_user_form_defaults_and_single_instance_abort(hass: HomeAssistant) -> None:
+    """Expose stable defaults and prevent configuring a second instance."""
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+    defaults = result["data_schema"]({})
+    assert defaults[CONF_PING_UUID] == ""
+    assert defaults[CONF_CREATE_BINARY_SENSOR] is True
+    assert defaults[CONF_CREATE_SENSOR] is False
+    assert defaults[CONF_SELF_HOSTED] is False
+
+    MockConfigEntry(domain=DOMAIN, data={"api_key": API_KEY}).add_to_hass(hass)
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "single_instance_allowed"
+
+
+async def test_self_hosted_defaults_and_invalid_credentials(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+) -> None:
+    """Preserve self-hosted defaults and report invalid credentials on its form."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={**_hosted_input(ping_uuid=None), CONF_SELF_HOSTED: True},
+    )
+    defaults = result["data_schema"]({})
+    assert defaults[CONF_SITE_ROOT] == DEFAULT_SITE_ROOT
+    assert defaults[CONF_PING_ENDPOINT] == ""
+    aioclient_mock.get("https://healthchecks.example.test/api/v1/checks/", status=401)
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {CONF_SITE_ROOT: "healthchecks.example.test", CONF_PING_ENDPOINT: ""},
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "auth_self"}
+
+
+def test_schema_helpers_apply_fallback_values() -> None:
+    """Use existing entry data as defaults when no submitted values exist."""
+    fallback = {
+        "api_key": API_KEY,
+        CONF_PING_UUID: PING_UUID,
+        CONF_CREATE_BINARY_SENSOR: False,
+        CONF_CREATE_SENSOR: True,
+        CONF_SELF_HOSTED: True,
+        CONF_SITE_ROOT: "https://self.example.test",
+        CONF_PING_ENDPOINT: "https://self.example.test/ping",
+    }
+    assert _build_user_input_schema(None, fallback)({}) == {
+        key: fallback[key]
+        for key in (
+            "api_key",
+            CONF_PING_UUID,
+            CONF_CREATE_BINARY_SENSOR,
+            CONF_CREATE_SENSOR,
+            CONF_SELF_HOSTED,
+        )
+    }
+    assert _build_self_hosted_schema(None, fallback)({}) == {
+        CONF_SITE_ROOT: fallback[CONF_SITE_ROOT],
+        CONF_PING_ENDPOINT: fallback[CONF_PING_ENDPOINT],
+    }
+    assert "api_key" not in _build_user_input_schema(None, fallback, reconf=True)({})
+
+
+def test_clean_url_preserves_root_path() -> None:
+    """Preserve an explicit root slash while normalizing a URL."""
+    assert clean_url("https://healthchecks.example.test/") == ("https://healthchecks.example.test/")
+
+
+async def test_self_hosted_step_supplies_omitted_ping_endpoint(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+) -> None:
+    """Derive the conventional ping endpoint when the submitted value is omitted."""
+    aioclient_mock.get("https://self.example.test/api/v1/checks/", status=401)
+    flow = HealthchecksioConfigFlow()
+    flow.hass = hass
+    flow.context = {"source": SOURCE_USER}
+    await flow.async_step_user({**_hosted_input(ping_uuid=None), CONF_SELF_HOSTED: True})
+
+    result = await flow.async_step_self_hosted(
+        {CONF_SITE_ROOT: "self.example.test", CONF_PING_ENDPOINT: None}
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "auth_self"}

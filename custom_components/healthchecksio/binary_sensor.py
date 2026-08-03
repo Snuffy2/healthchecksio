@@ -55,6 +55,11 @@ async def async_setup_entry(
 class HealthchecksioBinarySensor(CoordinatorEntity, BinarySensorEntity):
     """HealthChecks.io binary sensor class."""
 
+    @property
+    def available(self) -> bool:
+        """Return whether the coordinator and this check are available."""
+        return self.coordinator.last_update_success and self._attr_available
+
     def __init__(
         self,
         hass: HomeAssistant,
