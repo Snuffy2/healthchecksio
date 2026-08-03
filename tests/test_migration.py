@@ -103,6 +103,29 @@ async def test_v2_entities_migrate_to_entry_scoped_unique_ids(hass: HomeAssistan
     assert migrated_entity.unique_id == f"{entry.entry_id}_sensor_check-uuid"
 
 
+async def test_v2_entity_update_failure_stops_migration(
+    hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keep a v2 entry unchanged if its entity identity cannot be migrated."""
+    entry = MockConfigEntry(domain=DOMAIN, data={}, version=2)
+    entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    registry.async_get_or_create(
+        "sensor",
+        DOMAIN,
+        "sensor_check-uuid",
+        config_entry=entry,
+    )
+    monkeypatch.setattr(
+        registry,
+        "async_update_entity",
+        lambda *args, **kwargs: (_ for _ in ()).throw(ValueError("conflict")),
+    )
+
+    assert not await async_migrate_entry(hass, entry)
+    assert entry.version == 2
+
+
 async def test_entity_update_error_is_tolerated(
     hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
 ) -> None:
