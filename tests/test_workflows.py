@@ -44,5 +44,5 @@ def test_release_and_pytest_workflows_keep_their_packaging_and_test_contracts() 
     assert "python .github/scripts/update_release_version.py" in release_workflow
     assert "zip healthchecksio.zip -r ./" in release_workflow
     assert "files: ./custom_components/healthchecksio/healthchecksio.zip" in release_workflow
-    assert "pip install --group pytest ." in pytest_workflow
+    assert "pip install --group pytest -e ." in pytest_workflow
     assert "run: pytest" in pytest_workflow
