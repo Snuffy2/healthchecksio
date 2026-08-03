@@ -315,6 +315,40 @@ async def test_reconfigure_flow_updates_existing_hosted_entry(
     mock_schedule_reload.assert_called_once_with(entry.entry_id)
 
 
+async def test_reconfigure_flow_clears_existing_ping_uuid(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    entry_data: dict[str, str | bool],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Skip ping validation when a reconfigure submission clears the Ping UUID."""
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data, unique_id=API_KEY, version=3)
+    entry.add_to_hass(hass)
+    mock_schedule_reload = Mock()
+    monkeypatch.setattr(hass.config_entries, "async_schedule_reload", mock_schedule_reload)
+    aioclient_mock.get(f"{DEFAULT_SITE_ROOT}/api/v1/checks/", json=CHECKS_RESPONSE)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            CONF_API_KEY: API_KEY,
+            CONF_PING_UUID: "",
+            CONF_CREATE_BINARY_SENSOR: True,
+            CONF_CREATE_SENSOR: True,
+            CONF_SELF_HOSTED: False,
+        },
+    )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.data[CONF_PING_UUID] == ""
+    mock_schedule_reload.assert_called_once_with(entry.entry_id)
+
+
 async def test_reconfigure_flow_preserves_entry_after_invalid_submission(
     hass: HomeAssistant,
     aioclient_mock: Any,

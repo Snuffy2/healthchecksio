@@ -48,7 +48,7 @@ async def _test_credentials(
     check_session: ClientSession = async_get_clientsession(hass, check_verify_ssl)
     timeout10: ClientTimeout = ClientTimeout(total=10)
     headers: MutableMapping[str, Any] = {"X-Api-Key": api_key}
-    if ping_uuid is not None:
+    if ping_uuid:
         ping_verify_ssl: bool = ping_endpoint.startswith("https")
         ping_session: ClientSession = async_get_clientsession(hass, ping_verify_ssl)
         ping_url: str = f"{ping_endpoint}/{ping_uuid}"
