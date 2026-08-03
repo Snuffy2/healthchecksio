@@ -102,15 +102,15 @@ def _build_user_input_schema(
         user_input = {}
     if fallback is None:
         fallback = {}
-    if reconf:
-        schema: vol.Schema = vol.Schema({})
-    else:
-        schema = vol.Schema(
+    schema_data: dict[vol.Marker, object] = {
+        vol.Required(
+            CONF_API_KEY,
+            default=user_input.get(CONF_API_KEY, fallback.get(CONF_API_KEY, "")),
+        ): str,
+    }
+    if not reconf:
+        schema_data.update(
             {
-                vol.Required(
-                    CONF_API_KEY,
-                    default=user_input.get(CONF_API_KEY, fallback.get(CONF_API_KEY, "")),
-                ): str,
                 vol.Optional(
                     CONF_NAME,
                     default=user_input.get(
@@ -120,6 +120,7 @@ def _build_user_input_schema(
                 ): str,
             }
         )
+    schema: vol.Schema = vol.Schema(schema_data)
     return schema.extend(
         {
             vol.Optional(
@@ -194,7 +195,9 @@ class HealthchecksioConfigFlow(ConfigFlow, domain=DOMAIN):
         """Create a new entry or update the reconfigured one."""
         if self.source == SOURCE_RECONFIGURE:
             return self.async_update_reload_and_abort(
-                self._get_reconfigure_entry(), data_updates=data
+                self._get_reconfigure_entry(),
+                unique_id=data[CONF_API_KEY],
+                data_updates=data,
             )
         return self.async_create_entry(title=_get_entry_title(data), data=data)
 
@@ -242,13 +245,16 @@ class HealthchecksioConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_reconfigure(
         self, user_input: MutableMapping[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Reconfigure the non-authentication settings of an existing entry."""
+        """Reconfigure an existing entry."""
         config_entry = self._get_reconfigure_entry()
-        await self.async_set_unique_id(config_entry.unique_id)
-        self._abort_if_unique_id_mismatch()
-
         self._errors = {}
         if user_input is not None:
+            await self.async_set_unique_id(user_input[CONF_API_KEY])
+            existing_entry = self.hass.config_entries.async_entry_for_domain_unique_id(
+                DOMAIN, user_input[CONF_API_KEY]
+            )
+            if existing_entry is not None and existing_entry.entry_id != config_entry.entry_id:
+                return self.async_abort(reason="already_configured")
             if not user_input.get(CONF_CREATE_BINARY_SENSOR) and not user_input.get(
                 CONF_CREATE_SENSOR
             ):
@@ -262,7 +268,7 @@ class HealthchecksioConfigFlow(ConfigFlow, domain=DOMAIN):
                 user_input[CONF_SELF_HOSTED] = False
                 valid: bool = await _test_credentials(
                     hass=self.hass,
-                    api_key=config_entry.data[CONF_API_KEY],
+                    api_key=user_input[CONF_API_KEY],
                     site_root=user_input[CONF_SITE_ROOT],
                     ping_endpoint=user_input[CONF_PING_ENDPOINT],
                     ping_uuid=config_entry.data.get(CONF_PING_UUID),
@@ -291,15 +297,10 @@ class HealthchecksioConfigFlow(ConfigFlow, domain=DOMAIN):
             if user_input.get(CONF_PING_ENDPOINT) is None:
                 user_input[CONF_PING_ENDPOINT] = f"{user_input.get(CONF_SITE_ROOT)}/ping"
             user_input[CONF_PING_ENDPOINT] = clean_url(user_input[CONF_PING_ENDPOINT])
-            api_key: str
-            ping_uuid: str | None
+            api_key: str = self._initial_data[CONF_API_KEY]
+            ping_uuid: str | None = self._initial_data.get(CONF_PING_UUID)
             if self.source == SOURCE_RECONFIGURE:
-                config_entry = self._get_reconfigure_entry()
-                api_key = config_entry.data[CONF_API_KEY]
-                ping_uuid = config_entry.data.get(CONF_PING_UUID)
-            else:
-                api_key = self._initial_data[CONF_API_KEY]
-                ping_uuid = self._initial_data.get(CONF_PING_UUID)
+                ping_uuid = self._get_reconfigure_entry().data.get(CONF_PING_UUID)
             valid: bool = await _test_credentials(
                 hass=self.hass,
                 api_key=api_key,

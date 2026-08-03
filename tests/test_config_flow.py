@@ -5,7 +5,7 @@ from unittest.mock import Mock
 
 from aiohttp import ClientConnectionError
 from homeassistant.config_entries import SOURCE_RECONFIGURE, SOURCE_USER
-from homeassistant.const import CONF_NAME
+from homeassistant.const import CONF_API_KEY, CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 import pytest
@@ -33,6 +33,8 @@ from custom_components.healthchecksio.const import (
 from custom_components.healthchecksio.helpers import clean_url
 
 from .conftest import API_KEY, CHECKS_RESPONSE, PING_UUID
+
+UPDATED_API_KEY = "updated-api-key"
 
 
 def _hosted_input(*, ping_uuid: str | None = PING_UUID) -> dict[str, Any]:
@@ -278,13 +280,14 @@ async def test_reconfigure_flow_updates_existing_hosted_entry(
     assert result["step_id"] == "reconfigure"
     defaults = result["data_schema"]({})
     assert CONF_NAME not in defaults
-    assert "api_key" not in defaults
+    assert defaults[CONF_API_KEY] == API_KEY
     assert defaults[CONF_CREATE_BINARY_SENSOR] is True
     assert defaults[CONF_CREATE_SENSOR] is True
 
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {
+            CONF_API_KEY: UPDATED_API_KEY,
             CONF_CREATE_BINARY_SENSOR: False,
             CONF_CREATE_SENSOR: True,
             CONF_SELF_HOSTED: False,
@@ -294,10 +297,11 @@ async def test_reconfigure_flow_updates_existing_hosted_entry(
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "reconfigure_successful"
     assert entry.title == "Existing entry"
-    assert entry.unique_id == API_KEY
+    assert entry.unique_id == UPDATED_API_KEY
     assert entry.data == {
         **entry_data,
         CONF_NAME: "Existing entry",
+        CONF_API_KEY: UPDATED_API_KEY,
         CONF_CREATE_BINARY_SENSOR: False,
         CONF_CREATE_SENSOR: True,
         CONF_SELF_HOSTED: False,
@@ -327,6 +331,7 @@ async def test_reconfigure_flow_preserves_entry_after_invalid_submission(
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {
+            CONF_API_KEY: API_KEY,
             CONF_CREATE_BINARY_SENSOR: False,
             CONF_CREATE_SENSOR: False,
             CONF_SELF_HOSTED: False,
@@ -341,6 +346,7 @@ async def test_reconfigure_flow_preserves_entry_after_invalid_submission(
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {
+            CONF_API_KEY: API_KEY,
             CONF_CREATE_BINARY_SENSOR: True,
             CONF_CREATE_SENSOR: False,
             CONF_SELF_HOSTED: False,
@@ -351,6 +357,40 @@ async def test_reconfigure_flow_preserves_entry_after_invalid_submission(
     assert result["errors"] == {"base": "auth"}
     assert entry.data == entry_data
     mock_schedule_reload.assert_not_called()
+
+
+async def test_reconfigure_flow_rejects_an_api_key_used_by_another_entry(
+    hass: HomeAssistant,
+    entry_data: dict[str, str | bool],
+) -> None:
+    """Prevent a reconfigured entry from taking another entry's API key."""
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data, unique_id=API_KEY, version=3)
+    entry.add_to_hass(hass)
+    MockConfigEntry(
+        domain=DOMAIN,
+        data={**entry_data, CONF_API_KEY: UPDATED_API_KEY},
+        unique_id=UPDATED_API_KEY,
+        version=3,
+    ).add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            CONF_API_KEY: UPDATED_API_KEY,
+            CONF_CREATE_BINARY_SENSOR: True,
+            CONF_CREATE_SENSOR: False,
+            CONF_SELF_HOSTED: False,
+        },
+    )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert entry.unique_id == API_KEY
+    assert entry.data == entry_data
 
 
 async def test_reconfigure_flow_updates_self_hosted_urls(
@@ -377,6 +417,7 @@ async def test_reconfigure_flow_updates_self_hosted_urls(
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {
+            CONF_API_KEY: UPDATED_API_KEY,
             CONF_CREATE_BINARY_SENSOR: True,
             CONF_CREATE_SENSOR: False,
             CONF_SELF_HOSTED: True,
@@ -398,6 +439,7 @@ async def test_reconfigure_flow_updates_self_hosted_urls(
     assert result["reason"] == "reconfigure_successful"
     assert entry.data == {
         **entry_data,
+        CONF_API_KEY: UPDATED_API_KEY,
         CONF_CREATE_BINARY_SENSOR: True,
         CONF_CREATE_SENSOR: False,
         CONF_SELF_HOSTED: True,
@@ -459,7 +501,16 @@ def test_schema_helpers_apply_fallback_values() -> None:
         CONF_SITE_ROOT: fallback[CONF_SITE_ROOT],
         CONF_PING_ENDPOINT: fallback[CONF_PING_ENDPOINT],
     }
-    assert "api_key" not in _build_user_input_schema(None, fallback, reconf=True)({})
+    assert _build_user_input_schema(None, fallback, reconf=True)({}) == {
+        key: fallback[key]
+        for key in (
+            CONF_API_KEY,
+            CONF_PING_UUID,
+            CONF_CREATE_BINARY_SENSOR,
+            CONF_CREATE_SENSOR,
+            CONF_SELF_HOSTED,
+        )
+    }
 
 
 def test_clean_url_preserves_root_path() -> None:

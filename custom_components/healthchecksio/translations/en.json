@@ -23,6 +23,7 @@
             "reconfigure": {
                 "title": "Reconfigure HealthChecks.io",
                 "data": {
+                    "api_key": "API key",
                     "ping_uuid": "Ping UUID",
                     "create_binary_sensor": "Create Binary Sensors",
                     "create_sensor": "Create Sensors",
