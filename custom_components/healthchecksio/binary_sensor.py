@@ -91,7 +91,6 @@ class HealthchecksioBinarySensor(CoordinatorEntity, BinarySensorEntity):
         self._attr_device_info: DeviceInfo | None = {
             "identifiers": {(DOMAIN, coordinator.config_entry.entry_id)},
             "name": "HealthChecks.io",
-            "manufacturer": "SIA Monkey See Monkey Do",
         }
 
     async def async_added_to_hass(self) -> None:
