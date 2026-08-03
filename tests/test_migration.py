@@ -103,6 +103,25 @@ async def test_v2_entities_migrate_to_entry_scoped_unique_ids(hass: HomeAssistan
     assert migrated_entity.unique_id == f"{entry.entry_id}_sensor_check-uuid"
 
 
+async def test_v2_migration_skips_unrelated_platform(hass: HomeAssistant) -> None:
+    """Leave entities from unsupported platforms unchanged during migration."""
+    entry = MockConfigEntry(domain=DOMAIN, data={}, version=2)
+    entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    unrelated_entity = registry.async_get_or_create(
+        "switch",
+        DOMAIN,
+        "switch_check-uuid",
+        config_entry=entry,
+    )
+
+    assert await async_migrate_entry(hass, entry)
+    migrated_entity = registry.async_get(unrelated_entity.entity_id)
+    assert entry.version == 3
+    assert migrated_entity is not None
+    assert migrated_entity.unique_id == "switch_check-uuid"
+
+
 async def test_v2_entity_update_failure_stops_migration(
     hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
 ) -> None:
