@@ -137,6 +137,9 @@ fixable = ["ALL"]
 [tool.ruff.lint.flake8-pytest-style]
 fixture-parentheses = false
 
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]
+
 [tool.ruff.lint.isort]
 force-sort-within-sections = true
 known-third-party = ["homeassistant"]
