@@ -271,7 +271,7 @@ class HealthchecksioConfigFlow(ConfigFlow, domain=DOMAIN):
                     api_key=user_input[CONF_API_KEY],
                     site_root=user_input[CONF_SITE_ROOT],
                     ping_endpoint=user_input[CONF_PING_ENDPOINT],
-                    ping_uuid=config_entry.data.get(CONF_PING_UUID),
+                    ping_uuid=user_input.get(CONF_PING_UUID),
                 )
                 if valid:
                     return self._finish_configuration(user_input)
@@ -299,8 +299,6 @@ class HealthchecksioConfigFlow(ConfigFlow, domain=DOMAIN):
             user_input[CONF_PING_ENDPOINT] = clean_url(user_input[CONF_PING_ENDPOINT])
             api_key: str = self._initial_data[CONF_API_KEY]
             ping_uuid: str | None = self._initial_data.get(CONF_PING_UUID)
-            if self.source == SOURCE_RECONFIGURE:
-                ping_uuid = self._get_reconfigure_entry().data.get(CONF_PING_UUID)
             valid: bool = await _test_credentials(
                 hass=self.hass,
                 api_key=api_key,
@@ -316,6 +314,13 @@ class HealthchecksioConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="self_hosted",
-            data_schema=_build_self_hosted_schema(user_input=user_input),
+            data_schema=_build_self_hosted_schema(
+                user_input=user_input,
+                fallback=(
+                    self._get_reconfigure_entry().data
+                    if self.source == SOURCE_RECONFIGURE
+                    else None
+                ),
+            ),
             errors=self._errors,
         )

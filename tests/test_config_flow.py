@@ -35,6 +35,7 @@ from custom_components.healthchecksio.helpers import clean_url
 from .conftest import API_KEY, CHECKS_RESPONSE, PING_UUID
 
 UPDATED_API_KEY = "updated-api-key"
+UPDATED_PING_UUID = "22222222-2222-2222-2222-222222222222"
 
 
 def _hosted_input(*, ping_uuid: str | None = PING_UUID) -> dict[str, Any]:
@@ -268,7 +269,7 @@ async def test_reconfigure_flow_updates_existing_hosted_entry(
     entry.add_to_hass(hass)
     mock_schedule_reload = Mock()
     monkeypatch.setattr(hass.config_entries, "async_schedule_reload", mock_schedule_reload)
-    aioclient_mock.get(f"{DEFAULT_PING_ENDPOINT}/{PING_UUID}", status=200)
+    aioclient_mock.get(f"{DEFAULT_PING_ENDPOINT}/{UPDATED_PING_UUID}", status=200)
     aioclient_mock.get(f"{DEFAULT_SITE_ROOT}/api/v1/checks/", json=CHECKS_RESPONSE)
 
     result = await hass.config_entries.flow.async_init(
@@ -288,6 +289,7 @@ async def test_reconfigure_flow_updates_existing_hosted_entry(
         result["flow_id"],
         {
             CONF_API_KEY: UPDATED_API_KEY,
+            CONF_PING_UUID: UPDATED_PING_UUID,
             CONF_CREATE_BINARY_SENSOR: False,
             CONF_CREATE_SENSOR: True,
             CONF_SELF_HOSTED: False,
@@ -302,6 +304,7 @@ async def test_reconfigure_flow_updates_existing_hosted_entry(
         **entry_data,
         CONF_NAME: "Existing entry",
         CONF_API_KEY: UPDATED_API_KEY,
+        CONF_PING_UUID: UPDATED_PING_UUID,
         CONF_CREATE_BINARY_SENSOR: False,
         CONF_CREATE_SENSOR: True,
         CONF_SELF_HOSTED: False,
@@ -404,7 +407,7 @@ async def test_reconfigure_flow_updates_self_hosted_urls(
     entry.add_to_hass(hass)
     mock_schedule_reload = Mock()
     monkeypatch.setattr(hass.config_entries, "async_schedule_reload", mock_schedule_reload)
-    aioclient_mock.get("http://healthchecks.example.test/ping/" + PING_UUID, status=200)
+    aioclient_mock.get("http://healthchecks.example.test/ping/" + UPDATED_PING_UUID, status=200)
     aioclient_mock.get(
         "http://healthchecks.example.test/healthchecks/api/v1/checks/",
         json=CHECKS_RESPONSE,
@@ -418,6 +421,7 @@ async def test_reconfigure_flow_updates_self_hosted_urls(
         result["flow_id"],
         {
             CONF_API_KEY: UPDATED_API_KEY,
+            CONF_PING_UUID: UPDATED_PING_UUID,
             CONF_CREATE_BINARY_SENSOR: True,
             CONF_CREATE_SENSOR: False,
             CONF_SELF_HOSTED: True,
@@ -426,6 +430,9 @@ async def test_reconfigure_flow_updates_self_hosted_urls(
 
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "self_hosted"
+    defaults = result["data_schema"]({})
+    assert defaults[CONF_SITE_ROOT] == entry_data[CONF_SITE_ROOT]
+    assert defaults[CONF_PING_ENDPOINT] == entry_data[CONF_PING_ENDPOINT]
 
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
@@ -440,6 +447,7 @@ async def test_reconfigure_flow_updates_self_hosted_urls(
     assert entry.data == {
         **entry_data,
         CONF_API_KEY: UPDATED_API_KEY,
+        CONF_PING_UUID: UPDATED_PING_UUID,
         CONF_CREATE_BINARY_SENSOR: True,
         CONF_CREATE_SENSOR: False,
         CONF_SELF_HOSTED: True,
