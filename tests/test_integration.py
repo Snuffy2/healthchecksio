@@ -9,7 +9,14 @@ from pytest_homeassistant_custom_component.common import (  # type: ignore[impor
     MockConfigEntry,
 )
 
-from custom_components.healthchecksio.const import ATTR_LAST_PING, ATTR_STATUS, ATTRIBUTION, DOMAIN
+from custom_components.healthchecksio.const import (
+    ATTR_LAST_PING,
+    ATTR_STATUS,
+    ATTRIBUTION,
+    CONF_CREATE_BINARY_SENSOR,
+    CONF_CREATE_SENSOR,
+    DOMAIN,
+)
 
 from .conftest import API_KEY, CHECK_UUID, CHECKS_RESPONSE, CHECKS_URL, PING_URL
 
@@ -101,3 +108,34 @@ async def test_multiple_entries_create_separate_entities(
     assert first_entity_id != second_entity_id
     assert hass.states.get(first_entity_id) is not None
     assert hass.states.get(second_entity_id) is not None
+
+
+async def test_entry_setup_uses_entity_type_options(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    entry_data: dict[str, str | bool],
+) -> None:
+    """Use entity-type options in preference to the initial configuration values."""
+    aioclient_mock.get(PING_URL, status=200)
+    aioclient_mock.get(CHECKS_URL, json=CHECKS_RESPONSE)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            key: value
+            for key, value in entry_data.items()
+            if key not in (CONF_CREATE_BINARY_SENSOR, CONF_CREATE_SENSOR)
+        },
+        options={
+            CONF_CREATE_BINARY_SENSOR: False,
+            CONF_CREATE_SENSOR: True,
+        },
+        unique_id=API_KEY,
+        version=3,
+    )
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert hass.states.get("sensor.healthchecksio_database_backup") is not None
+    assert hass.states.get("binary_sensor.healthchecksio_database_backup") is None

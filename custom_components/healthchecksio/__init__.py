@@ -17,8 +17,11 @@ from .const import (
     CONF_PING_UUID,
     CONF_SELF_HOSTED,
     CONF_SITE_ROOT,
+    DEFAULT_CREATE_BINARY_SENSOR,
+    DEFAULT_CREATE_SENSOR,
     DEFAULT_PING_ENDPOINT,
     DEFAULT_SITE_ROOT,
+    PLATFORMS,
 )
 from .coordinator import HealthchecksioDataUpdateCoordinator
 from .helpers import clean_url
@@ -36,9 +39,15 @@ async def async_setup_entry(
     site_root: str = config_entry.data[CONF_SITE_ROOT]
     ping_endpoint: str = config_entry.data[CONF_PING_ENDPOINT]
     platforms: list[Platform] = []
-    if config_entry.data.get(CONF_CREATE_BINARY_SENSOR):
+    if config_entry.options.get(
+        CONF_CREATE_BINARY_SENSOR,
+        config_entry.data.get(CONF_CREATE_BINARY_SENSOR, DEFAULT_CREATE_BINARY_SENSOR),
+    ):
         platforms.append(Platform.BINARY_SENSOR)
-    if config_entry.data.get(CONF_CREATE_SENSOR):
+    if config_entry.options.get(
+        CONF_CREATE_SENSOR,
+        config_entry.data.get(CONF_CREATE_SENSOR, DEFAULT_CREATE_SENSOR),
+    ):
         platforms.append(Platform.SENSOR)
 
     # Configure the client.
@@ -72,16 +81,10 @@ async def async_unload_entry(
     """Unload a config entry."""
     _LOGGER.debug("Unloading Config Entry: %s", config_entry.as_dict())
 
-    platforms: list[Platform] = []
-    if config_entry.data.get(CONF_CREATE_BINARY_SENSOR):
-        platforms.append(Platform.BINARY_SENSOR)
-    if config_entry.data.get(CONF_CREATE_SENSOR):
-        platforms.append(Platform.SENSOR)
-
-    _LOGGER.debug("Unloading Platforms: %s", platforms)
+    _LOGGER.debug("Unloading Platforms: %s", PLATFORMS)
     unload_ok = await hass.config_entries.async_unload_platforms(
         config_entry,
-        platforms,
+        PLATFORMS,
     )
 
     if unload_ok:
@@ -190,7 +193,7 @@ def _migrate_1_to_2(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
 
 
 def _migrate_2_to_3(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
-    """Scope existing entity unique IDs to their config entry."""
+    """Scope entity IDs and move entity-type settings into options."""
     entity_registry = er.async_get(hass)
 
     for entity in er.async_entries_for_config_entry(entity_registry, config_entry.entry_id):
@@ -213,4 +216,21 @@ def _migrate_2_to_3(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
             )
             return False
 
-    return bool(hass.config_entries.async_update_entry(config_entry, version=3))
+    data = dict(config_entry.data)
+    options = dict(config_entry.options)
+    options.setdefault(
+        CONF_CREATE_BINARY_SENSOR,
+        data.pop(CONF_CREATE_BINARY_SENSOR, DEFAULT_CREATE_BINARY_SENSOR),
+    )
+    options.setdefault(
+        CONF_CREATE_SENSOR,
+        data.pop(CONF_CREATE_SENSOR, DEFAULT_CREATE_SENSOR),
+    )
+    return bool(
+        hass.config_entries.async_update_entry(
+            config_entry,
+            data=data,
+            options=options,
+            version=3,
+        )
+    )

@@ -30,6 +30,52 @@ async def test_future_version_rejected_and_v2_accepted(hass: HomeAssistant) -> N
     assert await async_migrate_entry(hass, current_entry)
 
 
+async def test_v2_entity_type_settings_migrate_to_options(hass: HomeAssistant) -> None:
+    """Move entity-type settings to options without retaining duplicate data."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_API_KEY: "key",
+            CONF_CREATE_BINARY_SENSOR: False,
+            CONF_CREATE_SENSOR: True,
+        },
+        version=2,
+    )
+    entry.add_to_hass(hass)
+
+    assert await async_migrate_entry(hass, entry)
+    assert entry.version == 3
+    assert entry.data == {CONF_API_KEY: "key"}
+    assert entry.options == {
+        CONF_CREATE_BINARY_SENSOR: False,
+        CONF_CREATE_SENSOR: True,
+    }
+
+
+async def test_v2_entity_type_settings_migration_failure_is_reported(
+    hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keep a v2 entry unchanged when its options cannot be persisted."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_CREATE_BINARY_SENSOR: True,
+            CONF_CREATE_SENSOR: False,
+        },
+        version=2,
+    )
+    entry.add_to_hass(hass)
+    monkeypatch.setattr(
+        hass.config_entries,
+        "async_update_entry",
+        lambda *args, **kwargs: False,
+    )
+
+    assert not await async_migrate_entry(hass, entry)
+    assert entry.version == 2
+    assert entry.options == {}
+
+
 @pytest.mark.parametrize(
     ("self_hosted", "site_root", "ping_endpoint", "expected_site", "expected_ping"),
     [
@@ -69,8 +115,10 @@ async def test_v1_data_and_relevant_entities_migrate(
     assert entry.version == 3
     assert entry.unique_id == "key"
     assert entry.data[CONF_PING_UUID] == "ping"
-    assert entry.data[CONF_CREATE_BINARY_SENSOR] is True
-    assert entry.data[CONF_CREATE_SENSOR] is False
+    assert CONF_CREATE_BINARY_SENSOR not in entry.data
+    assert CONF_CREATE_SENSOR not in entry.data
+    assert entry.options[CONF_CREATE_BINARY_SENSOR] is True
+    assert entry.options[CONF_CREATE_SENSOR] is False
     assert entry.data[CONF_SITE_ROOT] == expected_site
     assert entry.data[CONF_PING_ENDPOINT] == expected_ping
     migrated_target = registry.async_get(target.entity_id)

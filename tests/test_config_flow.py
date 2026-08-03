@@ -78,12 +78,14 @@ async def test_hosted_flow_creates_entry_after_check_and_ping_validation(
     assert result["title"] == INTEGRATION_NAME
     assert result["data"] == {
         "api_key": API_KEY,
-        CONF_CREATE_BINARY_SENSOR: True,
-        CONF_CREATE_SENSOR: True,
         CONF_PING_UUID: PING_UUID,
         CONF_SELF_HOSTED: False,
         CONF_SITE_ROOT: DEFAULT_SITE_ROOT,
         CONF_PING_ENDPOINT: DEFAULT_PING_ENDPOINT,
+    }
+    assert result["options"] == {
+        CONF_CREATE_BINARY_SENSOR: True,
+        CONF_CREATE_SENSOR: True,
     }
 
 
@@ -252,6 +254,62 @@ async def test_user_flow_rejects_an_already_configured_api_key(hass: HomeAssista
     assert result["reason"] == "already_configured"
 
 
+async def test_options_flow_updates_enabled_entity_types(
+    hass: HomeAssistant,
+    entry_data: dict[str, str | bool],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Persist selected entity types as options and reload the entry."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=entry_data,
+        options={
+            CONF_CREATE_BINARY_SENSOR: False,
+            CONF_CREATE_SENSOR: True,
+        },
+        unique_id=API_KEY,
+        version=3,
+    )
+    entry.add_to_hass(hass)
+    mock_schedule_reload = Mock()
+    monkeypatch.setattr(hass.config_entries, "async_schedule_reload", mock_schedule_reload)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "init"
+    defaults = result["data_schema"]({})
+    assert defaults[CONF_CREATE_BINARY_SENSOR] is False
+    assert defaults[CONF_CREATE_SENSOR] is True
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_CREATE_BINARY_SENSOR: False,
+            CONF_CREATE_SENSOR: False,
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "need_a_sensor"}
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_CREATE_BINARY_SENSOR: True,
+            CONF_CREATE_SENSOR: False,
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"] == {
+        CONF_CREATE_BINARY_SENSOR: True,
+        CONF_CREATE_SENSOR: False,
+    }
+    assert entry.options == result["data"]
+    mock_schedule_reload.assert_called_once_with(entry.entry_id)
+
+
 async def test_reconfigure_flow_updates_existing_hosted_entry(
     hass: HomeAssistant,
     aioclient_mock: Any,
@@ -301,15 +359,16 @@ async def test_reconfigure_flow_updates_existing_hosted_entry(
     assert entry.title == "Existing entry"
     assert entry.unique_id == UPDATED_API_KEY
     assert entry.data == {
-        **entry_data,
         CONF_NAME: "Existing entry",
         CONF_API_KEY: UPDATED_API_KEY,
         CONF_PING_UUID: UPDATED_PING_UUID,
-        CONF_CREATE_BINARY_SENSOR: False,
-        CONF_CREATE_SENSOR: True,
         CONF_SELF_HOSTED: False,
         CONF_SITE_ROOT: DEFAULT_SITE_ROOT,
         CONF_PING_ENDPOINT: DEFAULT_PING_ENDPOINT,
+    }
+    assert entry.options == {
+        CONF_CREATE_BINARY_SENSOR: False,
+        CONF_CREATE_SENSOR: True,
     }
     assert hass.config_entries.async_entries(DOMAIN) == [entry]
     mock_schedule_reload.assert_called_once_with(entry.entry_id)
@@ -346,6 +405,10 @@ async def test_reconfigure_flow_clears_existing_ping_uuid(
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "reconfigure_successful"
     assert entry.data[CONF_PING_UUID] == ""
+    assert entry.options == {
+        CONF_CREATE_BINARY_SENSOR: True,
+        CONF_CREATE_SENSOR: True,
+    }
     mock_schedule_reload.assert_called_once_with(entry.entry_id)
 
 
@@ -479,14 +542,15 @@ async def test_reconfigure_flow_updates_self_hosted_urls(
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "reconfigure_successful"
     assert entry.data == {
-        **entry_data,
         CONF_API_KEY: UPDATED_API_KEY,
         CONF_PING_UUID: UPDATED_PING_UUID,
-        CONF_CREATE_BINARY_SENSOR: True,
-        CONF_CREATE_SENSOR: False,
         CONF_SELF_HOSTED: True,
         CONF_SITE_ROOT: "http://healthchecks.example.test/healthchecks",
         CONF_PING_ENDPOINT: "http://healthchecks.example.test/ping",
+    }
+    assert entry.options == {
+        CONF_CREATE_BINARY_SENSOR: True,
+        CONF_CREATE_SENSOR: False,
     }
     assert hass.config_entries.async_entries(DOMAIN) == [entry]
     mock_schedule_reload.assert_called_once_with(entry.entry_id)

@@ -40,5 +40,19 @@
             "already_configured": "Already Configured",
             "reconfigure_successful": "Reconfiguration successful"
         }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "HealthChecks.io options",
+                "data": {
+                    "create_binary_sensor": "Create Binary Sensors",
+                    "create_sensor": "Create Sensors"
+                }
+            }
+        },
+        "error": {
+            "need_a_sensor": "Must choose to create Binary Sensor, Sensor or both"
+        }
     }
 }

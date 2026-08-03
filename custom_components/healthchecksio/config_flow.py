@@ -8,9 +8,16 @@ import logging
 from typing import Any
 
 from aiohttp import ClientError, ClientSession, ClientTimeout
-from homeassistant.config_entries import SOURCE_RECONFIGURE, ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import (
+    SOURCE_RECONFIGURE,
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+    OptionsFlowWithReload,
+)
 from homeassistant.const import CONF_API_KEY, CONF_NAME
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import voluptuous as vol
@@ -182,10 +189,42 @@ def _build_self_hosted_schema(
     )
 
 
+def _build_options_schema(config_entry: ConfigEntry) -> vol.Schema:
+    """Build the schema for selecting which entity types to create."""
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_CREATE_BINARY_SENSOR,
+                default=config_entry.options.get(
+                    CONF_CREATE_BINARY_SENSOR,
+                    config_entry.data.get(CONF_CREATE_BINARY_SENSOR, DEFAULT_CREATE_BINARY_SENSOR),
+                ),
+            ): selector.BooleanSelector(selector.BooleanSelectorConfig()),
+            vol.Required(
+                CONF_CREATE_SENSOR,
+                default=config_entry.options.get(
+                    CONF_CREATE_SENSOR,
+                    config_entry.data.get(CONF_CREATE_SENSOR, DEFAULT_CREATE_SENSOR),
+                ),
+            ): selector.BooleanSelector(selector.BooleanSelectorConfig()),
+        }
+    )
+
+
 def _get_entry_title(data: Mapping[str, Any]) -> str:
     """Return the configured entry title or the integration name."""
     name = data.get(CONF_NAME)
     return name.strip() if isinstance(name, str) and name.strip() else INTEGRATION_NAME
+
+
+def _pop_entity_type_options(data: MutableMapping[str, Any]) -> dict[str, bool]:
+    """Remove entity-type choices from entry data and return them as options."""
+    return {
+        CONF_CREATE_BINARY_SENSOR: data.pop(
+            CONF_CREATE_BINARY_SENSOR, DEFAULT_CREATE_BINARY_SENSOR
+        ),
+        CONF_CREATE_SENSOR: data.pop(CONF_CREATE_SENSOR, DEFAULT_CREATE_SENSOR),
+    }
 
 
 class HealthchecksioConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -198,15 +237,31 @@ class HealthchecksioConfigFlow(ConfigFlow, domain=DOMAIN):
         self._errors: dict[str, str] = {}
         self._initial_data: MutableMapping[str, Any] = {}
 
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+        """Return the options flow for this integration."""
+        return HealthchecksioOptionsFlow()
+
     def _finish_configuration(self, data: MutableMapping[str, Any]) -> ConfigFlowResult:
         """Create a new entry or update the reconfigured one."""
+        options = _pop_entity_type_options(data)
         if self.source == SOURCE_RECONFIGURE:
+            entry = self._get_reconfigure_entry()
+            entry_data = dict(entry.data)
+            entry_data.update(data)
+            _pop_entity_type_options(entry_data)
             return self.async_update_reload_and_abort(
-                self._get_reconfigure_entry(),
+                entry,
                 unique_id=data[CONF_API_KEY],
-                data_updates=data,
+                data=entry_data,
+                options=options,
             )
-        return self.async_create_entry(title=_get_entry_title(data), data=data)
+        return self.async_create_entry(
+            title=_get_entry_title(data),
+            data=data,
+            options=options,
+        )
 
     async def _async_validate_input(
         self, user_input: MutableMapping[str, Any]
@@ -277,7 +332,7 @@ class HealthchecksioConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="reconfigure",
             data_schema=_build_user_input_schema(
                 user_input=user_input,
-                fallback=config_entry.data,
+                fallback={**config_entry.data, **config_entry.options},
                 reconf=True,
             ),
             errors=self._errors,
@@ -319,4 +374,25 @@ class HealthchecksioConfigFlow(ConfigFlow, domain=DOMAIN):
                 ),
             ),
             errors=self._errors,
+        )
+
+
+class HealthchecksioOptionsFlow(OptionsFlowWithReload):
+    """Manage HealthChecks.io integration options."""
+
+    async def async_step_init(
+        self, user_input: MutableMapping[str, bool] | None = None
+    ) -> ConfigFlowResult:
+        """Manage the enabled HealthChecks.io entity types."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            if not user_input[CONF_CREATE_BINARY_SENSOR] and not user_input[CONF_CREATE_SENSOR]:
+                errors["base"] = "need_a_sensor"
+            else:
+                return self.async_create_entry(title="", data=user_input)
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=_build_options_schema(self.config_entry),
+            errors=errors,
         )
