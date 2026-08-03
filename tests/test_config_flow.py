@@ -1,9 +1,10 @@
 """End-to-end configuration-flow tests using the Home Assistant flow manager."""
 
 from typing import Any
+from unittest.mock import Mock
 
 from aiohttp import ClientConnectionError
-from homeassistant.config_entries import SOURCE_USER
+from homeassistant.config_entries import SOURCE_RECONFIGURE, SOURCE_USER
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
@@ -246,6 +247,165 @@ async def test_user_flow_rejects_an_already_configured_api_key(hass: HomeAssista
 
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
+
+
+async def test_reconfigure_flow_updates_existing_hosted_entry(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    entry_data: dict[str, str | bool],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Update hosted configuration without changing the existing config entry."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={**entry_data, CONF_NAME: "Existing entry"},
+        unique_id=API_KEY,
+        title="Existing entry",
+        version=3,
+    )
+    entry.add_to_hass(hass)
+    mock_schedule_reload = Mock()
+    monkeypatch.setattr(hass.config_entries, "async_schedule_reload", mock_schedule_reload)
+    aioclient_mock.get(f"{DEFAULT_PING_ENDPOINT}/{PING_UUID}", status=200)
+    aioclient_mock.get(f"{DEFAULT_SITE_ROOT}/api/v1/checks/", json=CHECKS_RESPONSE)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "reconfigure"
+    defaults = result["data_schema"]({})
+    assert CONF_NAME not in defaults
+    assert "api_key" not in defaults
+    assert defaults[CONF_CREATE_BINARY_SENSOR] is True
+    assert defaults[CONF_CREATE_SENSOR] is True
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            CONF_CREATE_BINARY_SENSOR: False,
+            CONF_CREATE_SENSOR: True,
+            CONF_SELF_HOSTED: False,
+        },
+    )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.title == "Existing entry"
+    assert entry.unique_id == API_KEY
+    assert entry.data == {
+        **entry_data,
+        CONF_NAME: "Existing entry",
+        CONF_CREATE_BINARY_SENSOR: False,
+        CONF_CREATE_SENSOR: True,
+        CONF_SELF_HOSTED: False,
+        CONF_SITE_ROOT: DEFAULT_SITE_ROOT,
+        CONF_PING_ENDPOINT: DEFAULT_PING_ENDPOINT,
+    }
+    assert hass.config_entries.async_entries(DOMAIN) == [entry]
+    mock_schedule_reload.assert_called_once_with(entry.entry_id)
+
+
+async def test_reconfigure_flow_preserves_entry_after_invalid_submission(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    entry_data: dict[str, str | bool],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keep the existing data intact until a valid reconfiguration succeeds."""
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data, unique_id=API_KEY, version=3)
+    entry.add_to_hass(hass)
+    mock_schedule_reload = Mock()
+    monkeypatch.setattr(hass.config_entries, "async_schedule_reload", mock_schedule_reload)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            CONF_CREATE_BINARY_SENSOR: False,
+            CONF_CREATE_SENSOR: False,
+            CONF_SELF_HOSTED: False,
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "need_a_sensor"}
+
+    aioclient_mock.get(f"{DEFAULT_PING_ENDPOINT}/{PING_UUID}", status=200)
+    aioclient_mock.get(f"{DEFAULT_SITE_ROOT}/api/v1/checks/", status=401)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            CONF_CREATE_BINARY_SENSOR: True,
+            CONF_CREATE_SENSOR: False,
+            CONF_SELF_HOSTED: False,
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "auth"}
+    assert entry.data == entry_data
+    mock_schedule_reload.assert_not_called()
+
+
+async def test_reconfigure_flow_updates_self_hosted_urls(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    entry_data: dict[str, str | bool],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validate and normalize self-hosted URLs before updating an existing entry."""
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data, unique_id=API_KEY, version=3)
+    entry.add_to_hass(hass)
+    mock_schedule_reload = Mock()
+    monkeypatch.setattr(hass.config_entries, "async_schedule_reload", mock_schedule_reload)
+    aioclient_mock.get("http://healthchecks.example.test/ping/" + PING_UUID, status=200)
+    aioclient_mock.get(
+        "http://healthchecks.example.test/healthchecks/api/v1/checks/",
+        json=CHECKS_RESPONSE,
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            CONF_CREATE_BINARY_SENSOR: True,
+            CONF_CREATE_SENSOR: False,
+            CONF_SELF_HOSTED: True,
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "self_hosted"
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            CONF_SITE_ROOT: "http://healthchecks.example.test/healthchecks//",
+            CONF_PING_ENDPOINT: "http://healthchecks.example.test/ping///",
+        },
+    )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.data == {
+        **entry_data,
+        CONF_CREATE_BINARY_SENSOR: True,
+        CONF_CREATE_SENSOR: False,
+        CONF_SELF_HOSTED: True,
+        CONF_SITE_ROOT: "http://healthchecks.example.test/healthchecks",
+        CONF_PING_ENDPOINT: "http://healthchecks.example.test/ping",
+    }
+    assert hass.config_entries.async_entries(DOMAIN) == [entry]
+    mock_schedule_reload.assert_called_once_with(entry.entry_id)
 
 
 async def test_self_hosted_defaults_and_invalid_credentials(
