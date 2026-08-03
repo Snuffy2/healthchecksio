@@ -4,15 +4,15 @@
 
 | Name                                                |    Stmts |     Miss |   Branch |   BrPart |    Cover |   Missing |
 |---------------------------------------------------- | -------: | -------: | -------: | -------: | -------: | --------: |
-| custom\_components/healthchecksio/\_\_init\_\_.py   |       82 |        0 |       24 |        0 |     100% |           |
+| custom\_components/healthchecksio/\_\_init\_\_.py   |      103 |        0 |       34 |        0 |     100% |           |
 | custom\_components/healthchecksio/binary\_sensor.py |       24 |        0 |        2 |        0 |     100% |           |
-| custom\_components/healthchecksio/config\_flow.py   |      102 |        0 |       32 |        0 |     100% |           |
+| custom\_components/healthchecksio/config\_flow.py   |      103 |        0 |       30 |        0 |     100% |           |
 | custom\_components/healthchecksio/const.py          |       27 |        0 |        0 |        0 |     100% |           |
 | custom\_components/healthchecksio/coordinator.py    |       48 |        0 |        8 |        0 |     100% |           |
 | custom\_components/healthchecksio/entity.py         |       55 |        0 |        4 |        0 |     100% |           |
 | custom\_components/healthchecksio/helpers.py        |       12 |        0 |        4 |        0 |     100% |           |
 | custom\_components/healthchecksio/sensor.py         |       19 |        0 |        0 |        0 |     100% |           |
-| **TOTAL**                                           |  **369** |    **0** |   **74** |    **0** | **100%** |           |
+| **TOTAL**                                           |  **391** |    **0** |   **82** |    **0** | **100%** |           |
 
 
 ## Setup coverage badge
