@@ -2,15 +2,16 @@
 
 from typing import Any
 
-from homeassistant.const import ATTR_ATTRIBUTION, STATE_UNAVAILABLE
+from homeassistant.const import ATTR_ATTRIBUTION, STATE_UNAVAILABLE, Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import (  # type: ignore[import-untyped]
     MockConfigEntry,
 )
 
 from custom_components.healthchecksio.const import ATTR_LAST_PING, ATTR_STATUS, ATTRIBUTION, DOMAIN
 
-from .conftest import API_KEY, CHECKS_RESPONSE, CHECKS_URL, PING_URL
+from .conftest import API_KEY, CHECK_UUID, CHECKS_RESPONSE, CHECKS_URL, PING_URL
 
 
 async def test_entry_setup_creates_entities_and_unload_marks_them_unavailable(
@@ -45,3 +46,58 @@ async def test_entry_setup_creates_entities_and_unload_marks_them_unavailable(
     assert unloaded_sensor.state == STATE_UNAVAILABLE
     assert unloaded_binary_sensor is not None
     assert unloaded_binary_sensor.state == STATE_UNAVAILABLE
+
+
+async def test_multiple_entries_create_separate_entities(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+    entry_data: dict[str, str | bool],
+) -> None:
+    """Keep entities separate when different entries expose the same check UUID."""
+    first_entry_data = dict(entry_data)
+    first_entry_data.pop("ping_uuid")
+    second_entry_data = {
+        **first_entry_data,
+        "api_key": "second-api-key",
+        "site_root": "https://second.healthchecks.example.test",
+    }
+    aioclient_mock.get(CHECKS_URL, json=CHECKS_RESPONSE)
+    aioclient_mock.get(
+        "https://second.healthchecks.example.test/api/v1/checks/",
+        json=CHECKS_RESPONSE,
+    )
+
+    first_entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=first_entry_data,
+        unique_id=API_KEY,
+        version=3,
+    )
+    second_entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=second_entry_data,
+        unique_id="second-api-key",
+        version=3,
+    )
+    first_entry.add_to_hass(hass)
+    second_entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(first_entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    first_entity_id = registry.async_get_entity_id(
+        Platform.SENSOR,
+        DOMAIN,
+        f"{first_entry.entry_id}_sensor_{CHECK_UUID}",
+    )
+    second_entity_id = registry.async_get_entity_id(
+        Platform.SENSOR,
+        DOMAIN,
+        f"{second_entry.entry_id}_sensor_{CHECK_UUID}",
+    )
+    assert first_entity_id is not None
+    assert second_entity_id is not None
+    assert first_entity_id != second_entity_id
+    assert hass.states.get(first_entity_id) is not None
+    assert hass.states.get(second_entity_id) is not None

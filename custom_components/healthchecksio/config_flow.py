@@ -171,7 +171,7 @@ def _build_self_hosted_schema(
 class HealthchecksioConfigFlow(ConfigFlow, domain=DOMAIN):
     """Config flow for HealthChecks.io integration."""
 
-    VERSION = 2
+    VERSION = 3
 
     def __init__(self) -> None:
         """Initialize the config flow."""
@@ -187,9 +187,6 @@ class HealthchecksioConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """User Input step."""
         self._errors = errors or {}
-        if self._async_current_entries():
-            return self.async_abort(reason="single_instance_allowed")
-
         if user_input is not None:
             # https://developers.home-assistant.io/docs/config_entries_config_flow_handler#unique-ids
             await self.async_set_unique_id(user_input.get(CONF_API_KEY))

@@ -93,7 +93,7 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
     """Migrate an old config entry."""
     version = config_entry.version
 
-    if version > 2:
+    if version > 3:
         # This means the user has downgraded from a future version
         _LOGGER.error(
             "HealthChecks.io downgraded and current config not compatible with earlier "
@@ -108,6 +108,12 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
         if not v1to2:
             return False
         version = 2
+
+    if version == 2:
+        v2to3: bool = _migrate_2_to_3(hass, config_entry)
+        if not v2to3:
+            return False
+        version = 3
 
     _LOGGER.info("Migration to version %s successful", version)
     return True
@@ -181,3 +187,30 @@ def _migrate_1_to_2(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
         _LOGGER.error("Migration of config_entry to version 2 unsuccessful")
         return False
     return True
+
+
+def _migrate_2_to_3(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
+    """Scope existing entity unique IDs to their config entry."""
+    entity_registry = er.async_get(hass)
+
+    for entity in er.async_entries_for_config_entry(entity_registry, config_entry.entry_id):
+        platform = entity.entity_id.split(".")[0]
+        old_prefix = f"{platform}_"
+        if platform not in (Platform.BINARY_SENSOR, Platform.SENSOR):
+            continue
+        if not entity.unique_id.startswith(old_prefix):
+            continue
+
+        new_unique_id = f"{config_entry.entry_id}_{entity.unique_id}"
+        try:
+            entity_registry.async_update_entity(entity.entity_id, new_unique_id=new_unique_id)
+        except ValueError as err:
+            _LOGGER.error(
+                "Error migrating entity: %s. %s: %s",
+                entity.entity_id,
+                err.__class__.__qualname__,
+                err,
+            )
+            return False
+
+    return bool(hass.config_entries.async_update_entry(config_entry, version=3))

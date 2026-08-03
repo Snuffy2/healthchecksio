@@ -200,8 +200,11 @@ async def test_hosted_flow_rejects_failed_checks_request(
     assert result["errors"] == {"base": "auth"}
 
 
-async def test_user_form_defaults_and_single_instance_abort(hass: HomeAssistant) -> None:
-    """Expose stable defaults and prevent configuring a second instance."""
+async def test_user_form_defaults_and_allows_another_api_key(
+    hass: HomeAssistant,
+    aioclient_mock: Any,
+) -> None:
+    """Expose stable defaults and allow a second API key to be configured."""
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
     defaults = result["data_schema"]({})
     assert defaults[CONF_PING_UUID] == ""
@@ -209,10 +212,31 @@ async def test_user_form_defaults_and_single_instance_abort(hass: HomeAssistant)
     assert defaults[CONF_CREATE_SENSOR] is False
     assert defaults[CONF_SELF_HOSTED] is False
 
-    MockConfigEntry(domain=DOMAIN, data={"api_key": API_KEY}).add_to_hass(hass)
-    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+    MockConfigEntry(domain=DOMAIN, data={"api_key": API_KEY}, unique_id=API_KEY).add_to_hass(hass)
+    aioclient_mock.get(f"{DEFAULT_SITE_ROOT}/api/v1/checks/", json=CHECKS_RESPONSE)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={**_hosted_input(ping_uuid=None), "api_key": "another-api-key"},
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"]["api_key"] == "another-api-key"
+
+
+async def test_user_flow_rejects_an_already_configured_api_key(hass: HomeAssistant) -> None:
+    """Prevent duplicate configuration of the same API key."""
+    MockConfigEntry(domain=DOMAIN, data={"api_key": API_KEY}, unique_id=API_KEY).add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data=_hosted_input(ping_uuid=None),
+    )
+
     assert result["type"] is FlowResultType.ABORT
-    assert result["reason"] == "single_instance_allowed"
+    assert result["reason"] == "already_configured"
 
 
 async def test_self_hosted_defaults_and_invalid_credentials(

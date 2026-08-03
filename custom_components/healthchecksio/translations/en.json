@@ -26,8 +26,7 @@
             "need_a_sensor": "Must choose to create Binary Sensor, Sensor or both"
         },
         "abort": {
-            "already_configured": "Already Configured",
-            "single_instance_allowed": "Only a single configuration of HealthChecks.io is allowed"
+            "already_configured": "Already Configured"
         }
     }
 }
