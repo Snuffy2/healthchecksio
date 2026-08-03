@@ -24,7 +24,7 @@ from .const import (
     PLATFORMS,
 )
 from .coordinator import HealthchecksioDataUpdateCoordinator
-from .helpers import clean_url
+from .helpers import clean_url, get_entity_type_option
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -32,15 +32,13 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 def _get_enabled_platforms(config_entry: ConfigEntry) -> list[Platform]:
     """Return platforms enabled by the current config-entry options."""
     platforms: list[Platform] = []
-    if config_entry.options.get(
+    if get_entity_type_option(
+        config_entry,
         CONF_CREATE_BINARY_SENSOR,
-        config_entry.data.get(CONF_CREATE_BINARY_SENSOR, DEFAULT_CREATE_BINARY_SENSOR),
+        DEFAULT_CREATE_BINARY_SENSOR,
     ):
         platforms.append(Platform.BINARY_SENSOR)
-    if config_entry.options.get(
-        CONF_CREATE_SENSOR,
-        config_entry.data.get(CONF_CREATE_SENSOR, DEFAULT_CREATE_SENSOR),
-    ):
+    if get_entity_type_option(config_entry, CONF_CREATE_SENSOR, DEFAULT_CREATE_SENSOR):
         platforms.append(Platform.SENSOR)
     return platforms
 
@@ -241,14 +239,10 @@ def _migrate_2_to_3(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
 
     data = dict(config_entry.data)
     options = dict(config_entry.options)
-    options.setdefault(
-        CONF_CREATE_BINARY_SENSOR,
-        data.pop(CONF_CREATE_BINARY_SENSOR, DEFAULT_CREATE_BINARY_SENSOR),
-    )
-    options.setdefault(
-        CONF_CREATE_SENSOR,
-        data.pop(CONF_CREATE_SENSOR, DEFAULT_CREATE_SENSOR),
-    )
+    create_binary_sensor = data.pop(CONF_CREATE_BINARY_SENSOR, DEFAULT_CREATE_BINARY_SENSOR)
+    create_sensor = data.pop(CONF_CREATE_SENSOR, DEFAULT_CREATE_SENSOR)
+    options.setdefault(CONF_CREATE_BINARY_SENSOR, create_binary_sensor)
+    options.setdefault(CONF_CREATE_SENSOR, create_sensor)
     return bool(
         hass.config_entries.async_update_entry(
             config_entry,

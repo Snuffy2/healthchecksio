@@ -37,7 +37,7 @@ from .const import (
     DOMAIN,
     INTEGRATION_NAME,
 )
-from .helpers import clean_url
+from .helpers import clean_url, get_entity_type_option
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -193,32 +193,30 @@ def _build_options_schema(
     config_entry: ConfigEntry, user_input: Mapping[str, bool] | None = None
 ) -> vol.Schema:
     """Build the schema for selecting which entity types to create."""
-    if user_input is None:
-        user_input = {}
+    defaults = {
+        CONF_CREATE_BINARY_SENSOR: get_entity_type_option(
+            config_entry,
+            CONF_CREATE_BINARY_SENSOR,
+            DEFAULT_CREATE_BINARY_SENSOR,
+        ),
+        CONF_CREATE_SENSOR: get_entity_type_option(
+            config_entry,
+            CONF_CREATE_SENSOR,
+            DEFAULT_CREATE_SENSOR,
+        ),
+    }
+    if user_input is not None:
+        defaults.update(user_input)
 
     return vol.Schema(
         {
             vol.Required(
                 CONF_CREATE_BINARY_SENSOR,
-                default=user_input.get(
-                    CONF_CREATE_BINARY_SENSOR,
-                    config_entry.options.get(
-                        CONF_CREATE_BINARY_SENSOR,
-                        config_entry.data.get(
-                            CONF_CREATE_BINARY_SENSOR, DEFAULT_CREATE_BINARY_SENSOR
-                        ),
-                    ),
-                ),
+                default=defaults[CONF_CREATE_BINARY_SENSOR],
             ): selector.BooleanSelector(selector.BooleanSelectorConfig()),
             vol.Required(
                 CONF_CREATE_SENSOR,
-                default=user_input.get(
-                    CONF_CREATE_SENSOR,
-                    config_entry.options.get(
-                        CONF_CREATE_SENSOR,
-                        config_entry.data.get(CONF_CREATE_SENSOR, DEFAULT_CREATE_SENSOR),
-                    ),
-                ),
+                default=defaults[CONF_CREATE_SENSOR],
             ): selector.BooleanSelector(selector.BooleanSelectorConfig()),
         }
     )
@@ -238,6 +236,12 @@ def _pop_entity_type_options(data: MutableMapping[str, Any]) -> dict[str, bool]:
         ),
         CONF_CREATE_SENSOR: data.pop(CONF_CREATE_SENSOR, DEFAULT_CREATE_SENSOR),
     }
+
+
+def _remove_entity_type_options(data: MutableMapping[str, Any]) -> None:
+    """Remove legacy entity-type selections from config-entry data."""
+    data.pop(CONF_CREATE_BINARY_SENSOR, None)
+    data.pop(CONF_CREATE_SENSOR, None)
 
 
 class HealthchecksioConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -263,7 +267,7 @@ class HealthchecksioConfigFlow(ConfigFlow, domain=DOMAIN):
             entry = self._get_reconfigure_entry()
             entry_data = dict(entry.data)
             entry_data.update(data)
-            _pop_entity_type_options(entry_data)
+            _remove_entity_type_options(entry_data)
             return self.async_update_reload_and_abort(
                 entry,
                 unique_id=data[CONF_API_KEY],
