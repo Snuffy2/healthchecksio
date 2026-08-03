@@ -189,22 +189,35 @@ def _build_self_hosted_schema(
     )
 
 
-def _build_options_schema(config_entry: ConfigEntry) -> vol.Schema:
+def _build_options_schema(
+    config_entry: ConfigEntry, user_input: Mapping[str, bool] | None = None
+) -> vol.Schema:
     """Build the schema for selecting which entity types to create."""
+    if user_input is None:
+        user_input = {}
+
     return vol.Schema(
         {
             vol.Required(
                 CONF_CREATE_BINARY_SENSOR,
-                default=config_entry.options.get(
+                default=user_input.get(
                     CONF_CREATE_BINARY_SENSOR,
-                    config_entry.data.get(CONF_CREATE_BINARY_SENSOR, DEFAULT_CREATE_BINARY_SENSOR),
+                    config_entry.options.get(
+                        CONF_CREATE_BINARY_SENSOR,
+                        config_entry.data.get(
+                            CONF_CREATE_BINARY_SENSOR, DEFAULT_CREATE_BINARY_SENSOR
+                        ),
+                    ),
                 ),
             ): selector.BooleanSelector(selector.BooleanSelectorConfig()),
             vol.Required(
                 CONF_CREATE_SENSOR,
-                default=config_entry.options.get(
+                default=user_input.get(
                     CONF_CREATE_SENSOR,
-                    config_entry.data.get(CONF_CREATE_SENSOR, DEFAULT_CREATE_SENSOR),
+                    config_entry.options.get(
+                        CONF_CREATE_SENSOR,
+                        config_entry.data.get(CONF_CREATE_SENSOR, DEFAULT_CREATE_SENSOR),
+                    ),
                 ),
             ): selector.BooleanSelector(selector.BooleanSelectorConfig()),
         }
@@ -393,6 +406,6 @@ class HealthchecksioOptionsFlow(OptionsFlowWithReload):
 
         return self.async_show_form(
             step_id="init",
-            data_schema=_build_options_schema(self.config_entry),
+            data_schema=_build_options_schema(self.config_entry, user_input),
             errors=errors,
         )

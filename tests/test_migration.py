@@ -73,6 +73,10 @@ async def test_v2_entity_type_settings_migration_failure_is_reported(
 
     assert not await async_migrate_entry(hass, entry)
     assert entry.version == 2
+    assert entry.data == {
+        CONF_CREATE_BINARY_SENSOR: True,
+        CONF_CREATE_SENSOR: False,
+    }
     assert entry.options == {}
 
 

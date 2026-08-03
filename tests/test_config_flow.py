@@ -292,6 +292,9 @@ async def test_options_flow_updates_enabled_entity_types(
 
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": "need_a_sensor"}
+    defaults = result["data_schema"]({})
+    assert defaults[CONF_CREATE_BINARY_SENSOR] is False
+    assert defaults[CONF_CREATE_SENSOR] is False
 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
