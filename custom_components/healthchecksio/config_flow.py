@@ -8,7 +8,7 @@ import logging
 from typing import Any
 
 from aiohttp import ClientError, ClientSession, ClientTimeout
-from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import SOURCE_RECONFIGURE, ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_API_KEY, CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import selector
@@ -48,7 +48,7 @@ async def _test_credentials(
     check_session: ClientSession = async_get_clientsession(hass, check_verify_ssl)
     timeout10: ClientTimeout = ClientTimeout(total=10)
     headers: MutableMapping[str, Any] = {"X-Api-Key": api_key}
-    if ping_uuid is not None:
+    if ping_uuid:
         ping_verify_ssl: bool = ping_endpoint.startswith("https")
         ping_session: ClientSession = async_get_clientsession(hass, ping_verify_ssl)
         ping_url: str = f"{ping_endpoint}/{ping_uuid}"
@@ -98,19 +98,26 @@ def _build_user_input_schema(
     fallback: Mapping[str, Any] | None = None,
     reconf: bool = False,
 ) -> vol.Schema:
+    """Build the user-input schema.
+
+    Args:
+        user_input: Submitted values, which take precedence when selecting defaults.
+        fallback: Existing values used as defaults when no submitted value exists.
+        reconf: Whether to omit ``CONF_NAME`` for a reconfigure flow.
+    """
     if user_input is None:
         user_input = {}
     if fallback is None:
         fallback = {}
-    if reconf:
-        schema: vol.Schema = vol.Schema({})
-    else:
-        schema = vol.Schema(
+    schema_data: dict[vol.Marker, object] = {
+        vol.Required(
+            CONF_API_KEY,
+            default=user_input.get(CONF_API_KEY, fallback.get(CONF_API_KEY, "")),
+        ): str,
+    }
+    if not reconf:
+        schema_data.update(
             {
-                vol.Required(
-                    CONF_API_KEY,
-                    default=user_input.get(CONF_API_KEY, fallback.get(CONF_API_KEY, "")),
-                ): str,
                 vol.Optional(
                     CONF_NAME,
                     default=user_input.get(
@@ -120,6 +127,7 @@ def _build_user_input_schema(
                 ): str,
             }
         )
+    schema: vol.Schema = vol.Schema(schema_data)
     return schema.extend(
         {
             vol.Optional(
@@ -152,7 +160,6 @@ def _build_user_input_schema(
 def _build_self_hosted_schema(
     user_input: MutableMapping[str, Any] | None,
     fallback: Mapping[str, Any] | None = None,
-    reconf: bool = False,
 ) -> vol.Schema:
     if user_input is None:
         user_input = {}
@@ -190,8 +197,42 @@ class HealthchecksioConfigFlow(ConfigFlow, domain=DOMAIN):
         """Initialize the config flow."""
         self._errors: dict[str, str] = {}
         self._initial_data: MutableMapping[str, Any] = {}
-        self._reconfigure_entry: ConfigEntry | None = None
-        self._prev_data: Mapping[str, Any] = {}
+
+    def _finish_configuration(self, data: MutableMapping[str, Any]) -> ConfigFlowResult:
+        """Create a new entry or update the reconfigured one."""
+        if self.source == SOURCE_RECONFIGURE:
+            return self.async_update_reload_and_abort(
+                self._get_reconfigure_entry(),
+                unique_id=data[CONF_API_KEY],
+                data_updates=data,
+            )
+        return self.async_create_entry(title=_get_entry_title(data), data=data)
+
+    async def _async_validate_input(
+        self, user_input: MutableMapping[str, Any]
+    ) -> ConfigFlowResult | None:
+        """Validate shared user and reconfigure input."""
+        if not user_input.get(CONF_CREATE_BINARY_SENSOR) and not user_input.get(CONF_CREATE_SENSOR):
+            self._errors["base"] = "need_a_sensor"
+            return None
+        if user_input.get(CONF_SELF_HOSTED):
+            self._initial_data = user_input
+            return await self.async_step_self_hosted()
+
+        user_input[CONF_SITE_ROOT] = DEFAULT_SITE_ROOT
+        user_input[CONF_PING_ENDPOINT] = DEFAULT_PING_ENDPOINT
+        user_input[CONF_SELF_HOSTED] = False
+        valid: bool = await _test_credentials(
+            hass=self.hass,
+            api_key=user_input[CONF_API_KEY],
+            site_root=user_input[CONF_SITE_ROOT],
+            ping_endpoint=user_input[CONF_PING_ENDPOINT],
+            ping_uuid=user_input.get(CONF_PING_UUID),
+        )
+        if valid:
+            return self._finish_configuration(user_input)
+        self._errors["base"] = "auth"
+        return None
 
     async def async_step_user(
         self,
@@ -205,34 +246,40 @@ class HealthchecksioConfigFlow(ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(user_input.get(CONF_API_KEY))
             self._abort_if_unique_id_configured()
 
-            if not user_input.get(CONF_CREATE_BINARY_SENSOR) and not user_input.get(
-                CONF_CREATE_SENSOR
-            ):
-                self._errors["base"] = "need_a_sensor"
-            elif user_input.get(CONF_SELF_HOSTED):
-                # don't check yet, we need more info
-                self._initial_data = user_input
-                return await self.async_step_self_hosted()
-            else:
-                user_input[CONF_SITE_ROOT] = DEFAULT_SITE_ROOT
-                user_input[CONF_PING_ENDPOINT] = DEFAULT_PING_ENDPOINT
-                user_input[CONF_SELF_HOSTED] = False
-                valid: bool = await _test_credentials(
-                    hass=self.hass,
-                    api_key=user_input[CONF_API_KEY],
-                    site_root=user_input[CONF_SITE_ROOT],
-                    ping_endpoint=user_input[CONF_PING_ENDPOINT],
-                    ping_uuid=user_input.get(CONF_PING_UUID),
-                )
-                if valid:
-                    return self.async_create_entry(
-                        title=_get_entry_title(user_input), data=user_input
-                    )
-                self._errors["base"] = "auth"
+            result = await self._async_validate_input(user_input)
+            if result is not None:
+                return result
 
         return self.async_show_form(
             step_id="user",
             data_schema=_build_user_input_schema(user_input=user_input),
+            errors=self._errors,
+        )
+
+    async def async_step_reconfigure(
+        self, user_input: MutableMapping[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Reconfigure an existing entry."""
+        config_entry = self._get_reconfigure_entry()
+        self._errors = {}
+        if user_input is not None:
+            await self.async_set_unique_id(user_input[CONF_API_KEY])
+            existing_entry = self.hass.config_entries.async_entry_for_domain_unique_id(
+                DOMAIN, user_input[CONF_API_KEY]
+            )
+            if existing_entry is not None and existing_entry.entry_id != config_entry.entry_id:
+                return self.async_abort(reason="already_configured")
+            result = await self._async_validate_input(user_input)
+            if result is not None:
+                return result
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=_build_user_input_schema(
+                user_input=user_input,
+                fallback=config_entry.data,
+                reconf=True,
+            ),
             errors=self._errors,
         )
 
@@ -246,21 +293,30 @@ class HealthchecksioConfigFlow(ConfigFlow, domain=DOMAIN):
             if user_input.get(CONF_PING_ENDPOINT) is None:
                 user_input[CONF_PING_ENDPOINT] = f"{user_input.get(CONF_SITE_ROOT)}/ping"
             user_input[CONF_PING_ENDPOINT] = clean_url(user_input[CONF_PING_ENDPOINT])
+            api_key: str = self._initial_data[CONF_API_KEY]
+            ping_uuid: str | None = self._initial_data.get(CONF_PING_UUID)
             valid: bool = await _test_credentials(
                 hass=self.hass,
-                api_key=self._initial_data[CONF_API_KEY],
+                api_key=api_key,
                 site_root=user_input[CONF_SITE_ROOT],
                 ping_endpoint=user_input[CONF_PING_ENDPOINT],
-                ping_uuid=self._initial_data.get(CONF_PING_UUID),
+                ping_uuid=ping_uuid,
             )
             if valid:
                 # merge data from initial config flow and this flow
                 data: MutableMapping[str, Any] = {**self._initial_data, **user_input}
-                return self.async_create_entry(title=_get_entry_title(data), data=data)
+                return self._finish_configuration(data)
             self._errors["base"] = "auth_self"
 
         return self.async_show_form(
             step_id="self_hosted",
-            data_schema=_build_self_hosted_schema(user_input=user_input),
+            data_schema=_build_self_hosted_schema(
+                user_input=user_input,
+                fallback=(
+                    self._get_reconfigure_entry().data
+                    if self.source == SOURCE_RECONFIGURE
+                    else None
+                ),
+            ),
             errors=self._errors,
         )

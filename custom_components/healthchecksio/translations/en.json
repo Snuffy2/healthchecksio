@@ -19,6 +19,16 @@
                     "site_root": "Site Root",
                     "ping_endpoint": "Ping Endpoint"
                 }
+            },
+            "reconfigure": {
+                "title": "Reconfigure HealthChecks.io",
+                "data": {
+                    "api_key": "API key",
+                    "ping_uuid": "Ping UUID",
+                    "create_binary_sensor": "Create Binary Sensors",
+                    "create_sensor": "Create Sensors",
+                    "self_hosted": "Use self-hosted instance"
+                }
             }
         },
         "error": {
@@ -27,7 +37,8 @@
             "need_a_sensor": "Must choose to create Binary Sensor, Sensor or both"
         },
         "abort": {
-            "already_configured": "Already Configured"
+            "already_configured": "Already Configured",
+            "reconfigure_successful": "Reconfiguration successful"
         }
     }
 }
