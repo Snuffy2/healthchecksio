@@ -32,9 +32,15 @@ For more detail, see the [HACS custom repository instructions][hacs-custom-repos
 2. Select **Add integration**, then search for **HealthChecks.io (by Snuffy2)**.
 3. Enter the requested details.
 
+Repeat these steps to add another Healthchecks.io project or self-hosted instance. Each API key can be configured once.
+
 ### API key
 
 Enter a read-write API key for the Healthchecks.io project you want to monitor. Create or view project API keys in **Project Settings** in Healthchecks.io.
+
+### Name
+
+Optional. Use a name to distinguish this configuration in **Devices & services**. It defaults to `HealthChecks.io`.
 
 ### Ping UUID
 

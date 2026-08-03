@@ -52,7 +52,7 @@ class HealthchecksioEntity(CoordinatorEntity):
         self._attr_available = False
         self._ping_uuid: str = ping_uuid
         self._attr_name: str = name
-        self._attr_unique_id: str = f"{platform}_{ping_uuid}"
+        self._attr_unique_id: str = f"{coordinator.config_entry.entry_id}_{platform}_{ping_uuid}"
         self._attr_extra_state_attributes: dict[str, Any] = {}
         self._attr_icon: str = ICON_DEFAULT
 

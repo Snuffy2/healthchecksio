@@ -12,6 +12,7 @@ uv.lock
 # misc
 .coverage
 .vscode
+coverage.json
 coverage.xml
 htmlcov
 .ruff_cache

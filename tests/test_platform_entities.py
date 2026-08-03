@@ -28,7 +28,7 @@ from custom_components.healthchecksio.const import (
 from custom_components.healthchecksio.entity import HealthchecksioEntity
 from custom_components.healthchecksio.sensor import HealthchecksioSensor
 
-from .conftest import API_KEY, CHECKS_RESPONSE, CHECKS_URL, PING_URL
+from .conftest import API_KEY, CHECK_UUID, CHECKS_RESPONSE, CHECKS_URL, PING_URL
 
 
 def test_platform_entities_inherit_the_shared_entity_base() -> None:
@@ -107,14 +107,10 @@ async def test_setup_and_unload_each_platform_alone(
 
 
 @pytest.mark.parametrize(
-    ("platform", "enabled_key", "unique_id"),
+    ("platform", "enabled_key"),
     [
-        (Platform.SENSOR, CONF_CREATE_SENSOR, "sensor_9d4dd48f-5632-4e53-b5a2-a630f1109a37"),
-        (
-            Platform.BINARY_SENSOR,
-            CONF_CREATE_BINARY_SENSOR,
-            "binary_sensor_9d4dd48f-5632-4e53-b5a2-a630f1109a37",
-        ),
+        (Platform.SENSOR, CONF_CREATE_SENSOR),
+        (Platform.BINARY_SENSOR, CONF_CREATE_BINARY_SENSOR),
     ],
 )
 async def test_platform_reuses_registered_entity_id(
@@ -123,7 +119,6 @@ async def test_platform_reuses_registered_entity_id(
     entry_data: dict[str, str | bool],
     platform: Platform,
     enabled_key: str,
-    unique_id: str,
 ) -> None:
     """Preserve an existing entity registry ID across entry setup."""
     entry_data[CONF_CREATE_SENSOR] = enabled_key == CONF_CREATE_SENSOR
@@ -131,6 +126,7 @@ async def test_platform_reuses_registered_entity_id(
     entry = MockConfigEntry(domain=DOMAIN, data=entry_data, unique_id=API_KEY, version=2)
     entry.add_to_hass(hass)
     registry = er.async_get(hass)
+    unique_id = f"{entry.entry_id}_{platform}_{CHECK_UUID}"
     registry.async_get_or_create(
         platform,
         DOMAIN,

@@ -24,8 +24,8 @@ from custom_components.healthchecksio.const import (
 
 async def test_future_version_rejected_and_v2_accepted(hass: HomeAssistant) -> None:
     """Reject unknown future schemas while accepting the current schema."""
-    future_entry = MockConfigEntry(domain=DOMAIN, data={}, version=3)
-    current_entry = MockConfigEntry(domain=DOMAIN, data={}, version=2)
+    future_entry = MockConfigEntry(domain=DOMAIN, data={}, version=4)
+    current_entry = MockConfigEntry(domain=DOMAIN, data={}, version=3)
     assert not await async_migrate_entry(hass, future_entry)
     assert await async_migrate_entry(hass, current_entry)
 
@@ -66,7 +66,7 @@ async def test_v1_data_and_relevant_entities_migrate(
     sensor = registry.async_get_or_create("sensor", DOMAIN, "sensor-old", config_entry=entry)
 
     assert await async_migrate_entry(hass, entry)
-    assert entry.version == 2
+    assert entry.version == 3
     assert entry.unique_id == "key"
     assert entry.data[CONF_PING_UUID] == "ping"
     assert entry.data[CONF_CREATE_BINARY_SENSOR] is True
@@ -79,9 +79,70 @@ async def test_v1_data_and_relevant_entities_migrate(
     assert migrated_target is not None
     assert migrated_prefixed is not None
     assert migrated_sensor is not None
-    assert migrated_target.unique_id == "binary_sensor_legacy"
-    assert migrated_prefixed.unique_id == "binary_sensor_existing"
+    assert migrated_target.unique_id == f"{entry.entry_id}_binary_sensor_legacy"
+    assert migrated_prefixed.unique_id == f"{entry.entry_id}_binary_sensor_existing"
     assert migrated_sensor.unique_id == "sensor-old"
+
+
+async def test_v2_entities_migrate_to_entry_scoped_unique_ids(hass: HomeAssistant) -> None:
+    """Preserve entity IDs while scoping v2 unique IDs to their entry."""
+    entry = MockConfigEntry(domain=DOMAIN, data={}, version=2)
+    entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    old_entity = registry.async_get_or_create(
+        "sensor",
+        DOMAIN,
+        "sensor_check-uuid",
+        config_entry=entry,
+    )
+
+    assert await async_migrate_entry(hass, entry)
+    migrated_entity = registry.async_get(old_entity.entity_id)
+    assert entry.version == 3
+    assert migrated_entity is not None
+    assert migrated_entity.unique_id == f"{entry.entry_id}_sensor_check-uuid"
+
+
+async def test_v2_migration_skips_unrelated_platform(hass: HomeAssistant) -> None:
+    """Leave entities from unsupported platforms unchanged during migration."""
+    entry = MockConfigEntry(domain=DOMAIN, data={}, version=2)
+    entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    unrelated_entity = registry.async_get_or_create(
+        "switch",
+        DOMAIN,
+        "switch_check-uuid",
+        config_entry=entry,
+    )
+
+    assert await async_migrate_entry(hass, entry)
+    migrated_entity = registry.async_get(unrelated_entity.entity_id)
+    assert entry.version == 3
+    assert migrated_entity is not None
+    assert migrated_entity.unique_id == "switch_check-uuid"
+
+
+async def test_v2_entity_update_failure_stops_migration(
+    hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keep a v2 entry unchanged if its entity identity cannot be migrated."""
+    entry = MockConfigEntry(domain=DOMAIN, data={}, version=2)
+    entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    registry.async_get_or_create(
+        "sensor",
+        DOMAIN,
+        "sensor_check-uuid",
+        config_entry=entry,
+    )
+    monkeypatch.setattr(
+        registry,
+        "async_update_entity",
+        lambda *args, **kwargs: (_ for _ in ()).throw(ValueError("conflict")),
+    )
+
+    assert not await async_migrate_entry(hass, entry)
+    assert entry.version == 2
 
 
 async def test_entity_update_error_is_tolerated(

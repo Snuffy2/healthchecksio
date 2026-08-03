@@ -6,6 +6,7 @@
                 "title": "HealthChecks.io",
                 "data": {
                     "api_key": "API key",
+                    "name": "Name",
                     "ping_uuid": "Ping UUID",
                     "create_binary_sensor": "Create Binary Sensors",
                     "create_sensor": "Create Sensors",
@@ -26,8 +27,7 @@
             "need_a_sensor": "Must choose to create Binary Sensor, Sensor or both"
         },
         "abort": {
-            "already_configured": "Already Configured",
-            "single_instance_allowed": "Only a single configuration of HealthChecks.io is allowed"
+            "already_configured": "Already Configured"
         }
     }
 }
