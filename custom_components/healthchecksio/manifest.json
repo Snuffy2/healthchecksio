@@ -1,11 +1,16 @@
 {
   "domain": "healthchecksio",
   "name": "HealthChecks.io (by Snuffy2)",
-  "codeowners": ["@Snuffy2"],
+  "codeowners": [
+    "@Snuffy2"
+  ],
   "config_flow": true,
-  "dependencies": ["network", "http"],
+  "dependencies": [
+    "network",
+    "http"
+  ],
   "documentation": "https://github.com/Snuffy2/healthchecksio",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/Snuffy2/healthchecksio/issues",
-  "version":"v1.0.4"
+  "version": "v1.0.5"
 }
