@@ -10,7 +10,10 @@ jobs:
   test:
     name: Post coverage Comment to PR
     runs-on: ubuntu-latest
-    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success'
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.actor.login != 'prek-autoupdate-bot'
     permissions:
       # Gives the action the necessary permissions for publishing new
       # comments in pull requests.
