@@ -17,7 +17,12 @@
 - Agents may create and use a repository-local virtual environment at `./.venv`.
 - Use `./.venv/bin/python`, `./.venv/bin/pytest`, and `./.venv/bin/prek` for local commands. A worktree may use the main checkout's `./.venv` when dependencies are unchanged.
 - Dependencies are declared in `pyproject.toml` groups: `ha`, `lint`, `pytest`, and `dev`.
-- Installing dependencies from the repository manifest into `./.venv` is allowed for local tooling and tests after approval. Do not perform unrelated network operations without explicit consent.
+- Installing dependencies from the repository manifest into `./.venv` is allowed for local tooling and tests.
+
+## Network access
+
+- Run read-only lookups that inform the task without asking: GitHub, Home Assistant docs and core source, Healthchecks.io API docs, and PyPI.
+- Ask first for package installs beyond the repo manifests and for any write to an external service that this file does not already authorize.
 
 ## Repository Structure
 
